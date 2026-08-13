@@ -1,5 +1,21 @@
 # Code Smell Detection Dataset
 
+> ### 📊 [**Results: kaiyi03.github.io/code-smell-multilingual**](https://kaiyi03.github.io/code-smell-multilingual/)
+>
+> A fork of [rosawoo/code-smell](https://github.com/rosawoo/code-smell) extending the
+> multilingual experiment. All 8,136 existing generations have been scored with this
+> repository's own `detector/smell_detector.py`, which the analysis notebooks never
+> called, and with two controls the earlier analysis lacked — conditioning on syntax
+> validity, and restricting language comparisons to prompts generated in every
+> language. Figures and tables are on the results page above; aggregate CSVs are in
+> [`_analysis/`](_analysis/).
+>
+> | | |
+> |---|---|
+> | Score existing outputs | `python -m pipeline.run_analysis --root <outputs> --lang en` |
+> | Rebuild figures | `python -m pipeline.make_figures` |
+> | Rebuild the results page | `python -m pipeline.make_site` |
+
 A structured dataset of 400-500 prompts for code smell detection research, following methodology from [arXiv:2503.10666](https://arxiv.org/abs/2503.10666).
 
 ## Overview
