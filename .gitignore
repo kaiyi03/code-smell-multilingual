@@ -39,3 +39,8 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Generated model outputs live on Drive, not here (109MB+ and growing).
+# Aggregate CSVs from pipeline/run_analysis.py are committed; per-file is not.
+outputs/
+_analysis/per_file.csv
