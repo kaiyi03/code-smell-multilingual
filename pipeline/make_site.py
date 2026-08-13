@@ -220,9 +220,16 @@ def build(analysis: Path, docs: Path):
     different task mixes.</li>
     <li><strong>mamba-codestral-7b excluded</strong> from aggregates: 33% syntax
     validity in English is a known model-loading failure, not model quality.</li>
-    <li><strong>Not yet controlled:</strong> machine translation rewrote 19–30% of
-    the API identifiers the prompts specify, so the non-English arms are not asking
-    for quite the same thing. Fixing this is the next task.</li>
+    <li><strong>Identifier drift — tested, and not a confound.</strong> Machine
+    translation rewrote 19–30% of the API identifiers the prompts specify
+    (<code>place_order</code> becomes <code>lugar_orden</code>). Compared within each
+    language, prompts whose identifiers were rewritten are no less likely to produce
+    valid Python than those left alone (Spanish 76.9% vs 78.7%, French 90.6% vs
+    90.5%, Chinese 87.2% vs 84.3%) and no less likely to produce the targeted smell.
+    The detector is structural and never reads a name, so renaming does not move what
+    is measured. It remains a wording problem for the write-up — the scope document
+    states the translated prompts preserve the original specification, and they do
+    not — rather than a defect in these results.</li>
   </ul>
   <p>Aggregate CSVs are in
   <a href="https://github.com/kaiyi03/code-smell-multilingual/tree/main/_analysis"><code>_analysis/</code></a>.</p>
