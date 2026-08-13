@@ -39,7 +39,8 @@ CHAIN_MIN_LINKS = 3       # a.b.c.d() -- three hops past the root
 ENVY_MIN_FOREIGN = 3      # >= 3 accesses on another object
 MIDDLE_MAN_RATIO = 0.5    # half the methods do nothing but delegate
 LAZY_MAX_METHODS = 1      # a class earning its keep does more than this
-LAZY_MAX_LINES = 8
+LAZY_MAX_LINES = 5     # a class with one short method and a
+                       # constructor is small, not lazy
 SWITCH_MIN_BRANCHES = 4   # if / elif / elif / elif on one subject
 COMMENT_DENSITY = 0.4
 COMMENT_MIN = 5
@@ -197,6 +198,31 @@ def check_middle_man(tree):
     return out
 
 
+def check_data_class_pure(tree):
+    """A class that is only fields.
+
+    smell_detector.check_data_class requires >= 2 methods of which most are named
+    get_/set_/to_/from_, so it finds the getter-and-setter form and misses the
+    purer one -- a constructor assigning attributes and no behaviour at all, which
+    is what a model usually writes when asked for a Data Class.
+    """
+    out = []
+    for cls in ast.walk(tree):
+        if not isinstance(cls, ast.ClassDef):
+            continue
+        methods = [m for m in _methods(cls) if not m.name.startswith("__")]
+        attrs = {n.attr for fn in _methods(cls) for n in ast.walk(fn)
+                 if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)
+                 and n.value.id == "self" and isinstance(n.ctx, ast.Store)}
+        accessors = [m for m in methods
+                     if m.name.startswith(("get_", "set_", "to_", "from_"))]
+        if len(attrs) >= 2 and len(methods) == len(accessors):
+            out.append({"smell": "Data Class", "class": cls.name,
+                        "attributes": sorted(attrs), "behaviour_methods": 0,
+                        "line_number": cls.lineno})
+    return out
+
+
 def check_lazy_class(tree):
     """A class too small to justify existing."""
     out = []
@@ -207,7 +233,8 @@ def check_lazy_class(tree):
         end = max((getattr(n, "end_lineno", n.lineno) for n in ast.walk(cls)
                    if hasattr(n, "lineno")), default=cls.lineno)
         lines = end - cls.lineno + 1
-        if len(methods) <= LAZY_MAX_METHODS and lines <= LAZY_MAX_LINES:
+        if len(methods) == 0 or (len(methods) <= LAZY_MAX_METHODS
+                                 and lines <= LAZY_MAX_LINES):
             out.append({"smell": "Lazy Class", "class": cls.name,
                         "methods": len(methods), "lines": lines,
                         "line_number": cls.lineno,
@@ -319,10 +346,13 @@ def check_dead_code(tree):
 
 
 def _is_null_literal(node):
-    """None, [], {}, (), 0, '' -- a placeholder rather than a real value."""
-    if isinstance(node, ast.Constant):
-        return node.value in (None, 0, "", False)
-    return isinstance(node, (ast.List, ast.Dict, ast.Tuple, ast.Set)) and not getattr(node, "elts", getattr(node, "keys", []))
+    """None -- "no value yet", as opposed to a real starting value.
+
+    Deliberately not 0, "" or []: `self.balance = 0` then `self.balance += x` is an
+    ordinary accumulator, and treating it as a placeholder made this fire on any
+    class with a counter.
+    """
+    return isinstance(node, ast.Constant) and node.value is None
 
 
 def check_temporary_field(tree):
@@ -339,6 +369,7 @@ def check_temporary_field(tree):
         if not isinstance(cls, ast.ClassDef):
             continue
         init_attrs, null_init, other_attrs, used = set(), set(), defaultdict(set), set()
+        augmented = set()
         for fn in _methods(cls):
             if fn.name == "__init__":
                 for stmt in ast.walk(fn):
@@ -357,7 +388,16 @@ def check_temporary_field(tree):
                             other_attrs[node.attr].add(fn.name)
                     else:
                         used.add(node.attr)
+            # `self.x += 1` is mutation of an existing value, not a field left
+            # unset, so it must not count as an assignment outside __init__.
+            for stmt in ast.walk(fn):
+                if isinstance(stmt, ast.AugAssign) and isinstance(stmt.target, ast.Attribute) \
+                        and isinstance(stmt.target.value, ast.Name) \
+                        and stmt.target.value.id == "self":
+                    augmented.add(stmt.target.attr)
         for attr, setters in other_attrs.items():
+            if attr in augmented:
+                continue
             never_declared = attr not in init_attrs and attr in used
             declared_empty = attr in null_init
             if never_declared or declared_empty:
@@ -520,6 +560,7 @@ def detect_extended_smells(code: str) -> list:
     found += check_message_chains(tree)
     found += check_feature_envy(tree)
     found += check_middle_man(tree)
+    found += check_data_class_pure(tree)
     found += check_lazy_class(tree)
     found += check_switch_statements(tree)
     found += check_dead_code(tree)

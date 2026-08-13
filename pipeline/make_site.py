@@ -218,6 +218,52 @@ def build(analysis: Path, docs: Path):
 </section>
 
 <section>
+  <h2>How the detector was extended, and how to check it</h2>
+  <p>The repository's <code>detector/smell_detector.py</code> implemented eight
+  checks — the smells decidable by counting things inside one file: parameters,
+  lines, nesting depth, methods per class, numeric literals, module-level
+  assignments, similar method bodies, fields without behaviour.
+  <code>detector/extended_smells.py</code> adds thirteen more, each a stated
+  threshold over the syntax tree:</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Added smell</th><th>Rule</th></tr></thead>
+    <tbody>
+      <tr><td>Data Clumps</td><td>≥3 parameter names shared by ≥2 signatures</td></tr>
+      <tr><td>Message Chains</td><td>attribute/call chain ≥3 hops from its root</td></tr>
+      <tr><td>Feature Envy</td><td>a method touching one other object ≥3 times, and more than <code>self</code></td></tr>
+      <tr><td>Middle Man</td><td>≥half a class's methods are a single forwarding call</td></tr>
+      <tr><td>Lazy Class</td><td>no methods beyond dunders, or ≤1 method within ≤5 lines</td></tr>
+      <tr><td>Switch Statements</td><td>if/elif ladder of ≥4 branches on one subject</td></tr>
+      <tr><td>Dead Code</td><td>unreachable statements, unused imports, unused locals</td></tr>
+      <tr><td>Temporary Field</td><td>attribute declared <code>None</code> and populated only in another method</td></tr>
+      <tr><td>Inappropriate Intimacy</td><td>reaching past another object's underscore, or two classes naming each other</td></tr>
+      <tr><td>Comments</td><td>commented-out code, or comment:code ratio ≥0.4</td></tr>
+      <tr><td>Refused Bequest</td><td>a subclass overriding an inherited method with a stub</td></tr>
+      <tr><td>Speculative Generality</td><td>≥2 stub hooks on a class nothing subclasses</td></tr>
+      <tr><td>Parallel Inheritance</td><td>two hierarchies whose subclass names mirror each other</td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>Two checks keep this honest, because a threshold can always be set
+  loose enough to find anything.</strong> The first is the base-rate column above:
+  a detector is run against files that targeted a <em>different</em> smell, and if
+  it fires there just as often it is measuring how common a pattern is, not whether
+  the prompt caused it. The second is
+  <code>detector/test_detectors.py</code>, which gives every one of the 21 a
+  snippet that clearly has the smell and one that clearly does not, and fails if a
+  detector misses the first or fires on the second.</p>
+  <p>Both caught real errors here rather than confirming the work. An early
+  Temporary Field rule required the attribute to be <em>absent</em> from
+  <code>__init__</code>, which excludes the smell's commonest form — it scored 1.1%
+  on its own targets against a 1.2% base rate. A Dead Code rule counted uncalled
+  public functions, which is the normal shape of a generated snippet. Lazy Class
+  matched any small class, reporting 92.5% until its threshold was tightened to
+  57%. And <code>check_global_state</code> turned out to emit two different labels,
+  only one of which the analysis was joining on, so files whose only signal was the
+  <code>global</code> keyword had been counted as misses.</p>
+  <p>Run it yourself: <code>python -m detector.test_detectors</code>.</p>
+</section>
+
+<section>
   <h2>How these numbers were produced</h2>
   <ul>
     <li><strong>Scored with the project's own detector, extended.</strong>

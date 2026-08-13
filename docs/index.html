@@ -81,7 +81,7 @@ a{color:var(--accent)}
     <figcaption>Left: the same measurement with and without the validity control.
     Right: what survives it.</figcaption>
   </figure>
-  <div class="scroll"><table><thead><tr><th>Prompt language</th><th>Files</th><th>Valid</th><th>ruff/100loc as reported</th><th>on valid code</th><th>Induction</th></tr></thead><tbody><tr><td>English</td><td>840</td><td>94.9%</td><td><span class="hi">8.13</span></td><td><span class="lo">4.71</span></td><td>57.9%</td></tr><tr><td>Spanish</td><td>840</td><td>81.5%</td><td><span class="hi">25.01</span></td><td><span class="lo">4.95</span></td><td>53.9%</td></tr><tr><td>French</td><td>840</td><td>93.3%</td><td><span class="hi">17.11</span></td><td><span class="lo">4.98</span></td><td>52.2%</td></tr><tr><td>Chinese</td><td>840</td><td>89.9%</td><td><span class="hi">32.68</span></td><td><span class="lo">6.53</span></td><td>43.0%</td></tr></tbody></table></div>
+  <div class="scroll"><table><thead><tr><th>Prompt language</th><th>Files</th><th>Valid</th><th>ruff/100loc as reported</th><th>on valid code</th><th>Induction</th></tr></thead><tbody><tr><td>English</td><td>840</td><td>94.9%</td><td><span class="hi">8.13</span></td><td><span class="lo">4.71</span></td><td>56.6%</td></tr><tr><td>Spanish</td><td>840</td><td>81.5%</td><td><span class="hi">25.01</span></td><td><span class="lo">4.95</span></td><td>50.8%</td></tr><tr><td>French</td><td>840</td><td>93.3%</td><td><span class="hi">17.11</span></td><td><span class="lo">4.98</span></td><td>49.3%</td></tr><tr><td>Chinese</td><td>840</td><td>89.9%</td><td><span class="hi">32.68</span></td><td><span class="lo">6.53</span></td><td>41.1%</td></tr></tbody></table></div>
   <div class="callout"><strong>Chinese looks four times worse than English until you
   score only code that is valid Python — then it is 1.4 times, and Spanish and
   French land within 6% of English.</strong> The apparent quality gap between
@@ -100,7 +100,7 @@ a{color:var(--accent)}
     <img src="figures/fig2_induction_by_smell.png" alt="Induction rate by targeted smell against base rate">
     <figcaption>Valid Python only. Sorted by lift.</figcaption>
   </figure>
-  <div class="scroll"><table><thead><tr><th>Targeted smell</th><th>Files</th><th>Asked for</th><th>Not asked</th><th>Lift</th></tr></thead><tbody><tr><td>Middle Man</td><td>284</td><td>82.3%</td><td>2.8%</td><td><span class="lo">+79.5</span></td></tr><tr><td>Lazy Class</td><td>284</td><td>92.5%</td><td>20.1%</td><td><span class="lo">+72.3</span></td></tr><tr><td>Long Parameter List</td><td>348</td><td>99.7%</td><td>28.9%</td><td><span class="lo">+70.8</span></td></tr><tr><td>Magic Numbers/Strings</td><td>306</td><td>94.1%</td><td>25.6%</td><td><span class="lo">+68.5</span></td></tr><tr><td>Switch Statements</td><td>306</td><td>60.8%</td><td>2.3%</td><td><span class="lo">+58.4</span></td></tr><tr><td>Data Class</td><td>284</td><td>64.2%</td><td>7.7%</td><td><span class="lo">+56.6</span></td></tr><tr><td>Global State</td><td>284</td><td>71.6%</td><td>22.2%</td><td><span class="lo">+49.4</span></td></tr><tr><td>Message Chains</td><td>284</td><td>49.3%</td><td>3.0%</td><td><span class="lo">+46.3</span></td></tr><tr><td>Deep Nesting</td><td>306</td><td>47.5%</td><td>3.6%</td><td><span class="lo">+43.9</span></td></tr><tr><td>Long Method</td><td>348</td><td>65.3%</td><td>22.2%</td><td><span class="lo">+43.1</span></td></tr><tr><td>Parallel Inheritance Hierarchies</td><td>284</td><td>43.0%</td><td>0.1%</td><td><span class="lo">+42.9</span></td></tr><tr><td>Duplicated Code</td><td>332</td><td>97.4%</td><td>56.6%</td><td><span class="lo">+40.8</span></td></tr><tr><td>Feature Envy</td><td>324</td><td>39.8%</td><td>3.5%</td><td><span class="lo">+36.3</span></td></tr><tr><td>Refused Bequest</td><td>284</td><td>37.0%</td><td>1.7%</td><td><span class="lo">+35.4</span></td></tr><tr><td>God Class / Large Class</td><td>348</td><td>33.4%</td><td>4.5%</td><td><span class="lo">+28.9</span></td></tr><tr><td>Comments (as smell indicator)</td><td>262</td><td>32.1%</td><td>7.8%</td><td><span class="lo">+24.2</span></td></tr><tr><td>Data Clumps</td><td>324</td><td>28.6%</td><td>5.5%</td><td><span class="lo">+23.1</span></td></tr><tr><td>Temporary Field</td><td>283</td><td>27.6%</td><td>6.2%</td><td><span class="lo">+21.3</span></td></tr><tr><td>Dead Code <span class="hi">weak</span></td><td>284</td><td>22.9%</td><td>13.0%</td><td><span class="hi">+9.9</span></td></tr><tr><td>Inappropriate Intimacy <span class="hi">weak</span></td><td>306</td><td>8.5%</td><td>0.0%</td><td><span class="hi">+8.5</span></td></tr><tr><td>Speculative Generality <span class="hi">weak</span></td><td>284</td><td>13.2%</td><td>7.0%</td><td><span class="hi">+6.2</span></td></tr></tbody></table></div>
+  <div class="scroll"><table><thead><tr><th>Targeted smell</th><th>Files</th><th>Asked for</th><th>Not asked</th><th>Lift</th></tr></thead><tbody><tr><td>Middle Man</td><td>284</td><td>82.3%</td><td>2.8%</td><td><span class="lo">+79.5</span></td></tr><tr><td>Long Parameter List</td><td>348</td><td>99.7%</td><td>28.9%</td><td><span class="lo">+70.8</span></td></tr><tr><td>Magic Numbers/Strings</td><td>306</td><td>94.1%</td><td>25.6%</td><td><span class="lo">+68.5</span></td></tr><tr><td>Switch Statements</td><td>306</td><td>60.8%</td><td>2.3%</td><td><span class="lo">+58.4</span></td></tr><tr><td>Global State</td><td>284</td><td>73.9%</td><td>22.2%</td><td><span class="lo">+51.7</span></td></tr><tr><td>Data Class</td><td>284</td><td>64.2%</td><td>16.4%</td><td><span class="lo">+47.8</span></td></tr><tr><td>Message Chains</td><td>284</td><td>49.3%</td><td>3.0%</td><td><span class="lo">+46.3</span></td></tr><tr><td>Deep Nesting</td><td>306</td><td>47.5%</td><td>3.6%</td><td><span class="lo">+43.9</span></td></tr><tr><td>Long Method</td><td>348</td><td>65.3%</td><td>22.2%</td><td><span class="lo">+43.1</span></td></tr><tr><td>Parallel Inheritance Hierarchies</td><td>284</td><td>43.0%</td><td>0.1%</td><td><span class="lo">+42.9</span></td></tr><tr><td>Duplicated Code</td><td>332</td><td>97.4%</td><td>56.6%</td><td><span class="lo">+40.8</span></td></tr><tr><td>Lazy Class</td><td>284</td><td>57.0%</td><td>18.7%</td><td><span class="lo">+38.3</span></td></tr><tr><td>Feature Envy</td><td>324</td><td>39.8%</td><td>3.5%</td><td><span class="lo">+36.3</span></td></tr><tr><td>Refused Bequest</td><td>284</td><td>37.0%</td><td>1.7%</td><td><span class="lo">+35.4</span></td></tr><tr><td>God Class / Large Class</td><td>348</td><td>33.4%</td><td>4.5%</td><td><span class="lo">+28.9</span></td></tr><tr><td>Comments (as smell indicator)</td><td>262</td><td>32.1%</td><td>7.8%</td><td><span class="lo">+24.2</span></td></tr><tr><td>Data Clumps</td><td>324</td><td>28.6%</td><td>5.5%</td><td><span class="lo">+23.1</span></td></tr><tr><td>Temporary Field <span class="hi">weak</span></td><td>283</td><td>17.0%</td><td>3.2%</td><td><span class="hi">+13.7</span></td></tr><tr><td>Dead Code <span class="hi">weak</span></td><td>284</td><td>22.9%</td><td>13.0%</td><td><span class="hi">+9.9</span></td></tr><tr><td>Inappropriate Intimacy <span class="hi">weak</span></td><td>306</td><td>8.5%</td><td>0.0%</td><td><span class="hi">+8.5</span></td></tr><tr><td>Speculative Generality <span class="hi">weak</span></td><td>284</td><td>13.2%</td><td>7.0%</td><td><span class="hi">+6.2</span></td></tr></tbody></table></div>
   <p>Models comply almost always when the smell is a local property of one function,
   and resist when it requires committing to a bad overall structure: asked for a God
   Class they tend to split the work across several well-formed classes instead.
@@ -121,6 +121,52 @@ a{color:var(--accent)}
   Spanish and collapses in Chinese. The Qwen, StarCoder2 and Yi families barely
   move. No account of “non-English prompts are harder” explains a model that
   survives Chinese but not Spanish.</p>
+</section>
+
+<section>
+  <h2>How the detector was extended, and how to check it</h2>
+  <p>The repository's <code>detector/smell_detector.py</code> implemented eight
+  checks — the smells decidable by counting things inside one file: parameters,
+  lines, nesting depth, methods per class, numeric literals, module-level
+  assignments, similar method bodies, fields without behaviour.
+  <code>detector/extended_smells.py</code> adds thirteen more, each a stated
+  threshold over the syntax tree:</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Added smell</th><th>Rule</th></tr></thead>
+    <tbody>
+      <tr><td>Data Clumps</td><td>≥3 parameter names shared by ≥2 signatures</td></tr>
+      <tr><td>Message Chains</td><td>attribute/call chain ≥3 hops from its root</td></tr>
+      <tr><td>Feature Envy</td><td>a method touching one other object ≥3 times, and more than <code>self</code></td></tr>
+      <tr><td>Middle Man</td><td>≥half a class's methods are a single forwarding call</td></tr>
+      <tr><td>Lazy Class</td><td>no methods beyond dunders, or ≤1 method within ≤5 lines</td></tr>
+      <tr><td>Switch Statements</td><td>if/elif ladder of ≥4 branches on one subject</td></tr>
+      <tr><td>Dead Code</td><td>unreachable statements, unused imports, unused locals</td></tr>
+      <tr><td>Temporary Field</td><td>attribute declared <code>None</code> and populated only in another method</td></tr>
+      <tr><td>Inappropriate Intimacy</td><td>reaching past another object's underscore, or two classes naming each other</td></tr>
+      <tr><td>Comments</td><td>commented-out code, or comment:code ratio ≥0.4</td></tr>
+      <tr><td>Refused Bequest</td><td>a subclass overriding an inherited method with a stub</td></tr>
+      <tr><td>Speculative Generality</td><td>≥2 stub hooks on a class nothing subclasses</td></tr>
+      <tr><td>Parallel Inheritance</td><td>two hierarchies whose subclass names mirror each other</td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>Two checks keep this honest, because a threshold can always be set
+  loose enough to find anything.</strong> The first is the base-rate column above:
+  a detector is run against files that targeted a <em>different</em> smell, and if
+  it fires there just as often it is measuring how common a pattern is, not whether
+  the prompt caused it. The second is
+  <code>detector/test_detectors.py</code>, which gives every one of the 21 a
+  snippet that clearly has the smell and one that clearly does not, and fails if a
+  detector misses the first or fires on the second.</p>
+  <p>Both caught real errors here rather than confirming the work. An early
+  Temporary Field rule required the attribute to be <em>absent</em> from
+  <code>__init__</code>, which excludes the smell's commonest form — it scored 1.1%
+  on its own targets against a 1.2% base rate. A Dead Code rule counted uncalled
+  public functions, which is the normal shape of a generated snippet. Lazy Class
+  matched any small class, reporting 92.5% until its threshold was tightened to
+  57%. And <code>check_global_state</code> turned out to emit two different labels,
+  only one of which the analysis was joining on, so files whose only signal was the
+  <code>global</code> keyword had been counted as misses.</p>
+  <p>Run it yourself: <code>python -m detector.test_detectors</code>.</p>
 </section>
 
 <section>

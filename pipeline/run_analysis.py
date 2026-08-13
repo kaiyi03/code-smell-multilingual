@@ -104,6 +104,9 @@ DETECTOR_TO_DATASET = {
     "God Class":            "God Class / Large Class",
     "Magic Number":         "Magic Numbers/Strings",
     "Global State":         "Global State",
+    # check_global_state emits two labels; without this alias every file whose
+    # only global signal is the `global` keyword scored as a miss.
+    "Global State (global keyword)": "Global State",
     "Data Class":           "Data Class",
     # detector/extended_smells.py -- labels already match the dataset exactly
     "Data Clumps":                       "Data Clumps",
@@ -120,7 +123,7 @@ DETECTOR_TO_DATASET = {
     "Speculative Generality":            "Speculative Generality",
     "Parallel Inheritance Hierarchies":  "Parallel Inheritance Hierarchies",
 }
-DATASET_TO_DETECTOR = {v: k for k, v in DETECTOR_TO_DATASET.items()}
+COVERED_SMELLS = set(DETECTOR_TO_DATASET.values())
 
 CAT_RE = re.compile(r"(.+?)_(basic|intermediate|advanced)_\d+$")
 
@@ -222,16 +225,21 @@ def score_file(path, src, ruff_codes, prompts):
     # --- the project's own detector plus the extension: what the study is asking
     det = detect_all_smells(src)
     ext = detect_extended_smells(src)
-    found = set(det["smell_types_detected"]) | {s["smell"] for s in ext}
+    raw = set(det["smell_types_detected"]) | {s["smell"] for s in ext}
+    # Normalise to the dataset's vocabulary here, so everything downstream is a
+    # plain equality. check_global_state emits both "Global State" and "Global
+    # State (global keyword)"; before this, files carrying only the second scored
+    # as misses.
+    found = {DETECTOR_TO_DATASET.get(s, s) for s in raw}
     row["n_smells"] = det["total_smells"] + len(ext)
     row["smells_found"] = ";".join(sorted(found))
 
     # Was the smell the prompt asked for actually produced? Blank when no
     # detector covers the targeted smell -- that is different from a miss, and
-    # collapsing the two would silently score 17 of 25 categories as failures.
-    covered = [t for t in targets if t in DATASET_TO_DETECTOR]
+    # collapsing the two would silently score those categories as failures.
+    covered = [t for t in targets if t in COVERED_SMELLS]
     if covered:
-        hits = sum(1 for t in covered if DATASET_TO_DETECTOR[t] in found)
+        hits = sum(1 for t in covered if t in found)
         row["target_covered"] = 1
         row["target_hit"] = int(hits == len(covered))
     else:
@@ -382,15 +390,14 @@ def main():
     # wearing the smell's name, and the lift column makes that visible.
     by_smell = []
     valid = [r for r in agg if r["syntax_ok"]]
-    for label in sorted(DATASET_TO_DETECTOR):
-        detector_label = DATASET_TO_DETECTOR[label]
+    for label in sorted(COVERED_SMELLS):
         g = [r for r in agg if label in r["target_smells"].split(";")]
         if not g:
             continue
         row = summarise(g, {"target_smell": label})
 
         off = [r for r in valid if label not in r["target_smells"].split(";")]
-        fires = sum(1 for r in off if detector_label in r["smells_found"].split(";"))
+        fires = sum(1 for r in off if label in r["smells_found"].split(";"))
         base = round(100.0 * fires / len(off), 2) if off else ""
         row["base_rate"] = base
         row["lift"] = (round(row["induction_valid"] - base, 2)
@@ -446,7 +453,7 @@ def main():
     print(f"\n  {len(cov)} of {len(agg)} files target a smell the detector covers "
           f"({100 * len(cov) / len(agg):.0f}%).")
     uncovered = sorted({t for r in agg for t in r["target_smells"].split(";")
-                        if t and t not in DATASET_TO_DETECTOR})
+                        if t and t not in COVERED_SMELLS})
     print(f"  {len(uncovered)} targeted smells still have no detector: "
           f"{', '.join(uncovered)}")
     if uncovered and sorted(uncovered) != sorted(UNDETECTABLE):
