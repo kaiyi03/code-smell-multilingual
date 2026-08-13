@@ -120,10 +120,15 @@ def build(analysis: Path, docs: Path):
                           f'<span class="lo">{f(r, "ruff_per_100loc_valid", 2)}</span>',
                           f(r, "induction_valid", 1, "%")])
 
-    # --- smell table
-    smell_rows = [[r["target_smell"], f(r, "n_covered", 0),
-                   f(r, "induction_valid", 1, "%")]
-                  for r in sorted(by_smell, key=lambda x: -float(x["induction_valid"] or 0))]
+    # --- smell table, with the discrimination check beside each rate
+    smell_rows = []
+    for r in sorted(by_smell, key=lambda x: -float(x["lift"] or -999)):
+        lift = float(r["lift"] or 0)
+        weak = lift < 20
+        name = r["target_smell"] + (' <span class="hi">weak</span>' if weak else "")
+        smell_rows.append([name, f(r, "n_covered", 0), f(r, "induction_valid", 1, "%"),
+                           f(r, "base_rate", 1, "%"),
+                           f'<span class="{"hi" if weak else "lo"}">{lift:+.1f}</span>'])
 
     # --- model x language
     models = sorted({r["model"] for r in by_ml})
@@ -180,16 +185,22 @@ def build(analysis: Path, docs: Path):
 <section>
   <h2>What models do when asked for a smell</h2>
   <p>Every prompt names a smell it wants the generated code to exhibit. Running the
-  project's own detector over the output asks whether that smell actually appears —
-  the measurement the pipeline was built for and had never run.</p>
+  detector over the output asks whether that smell actually appears — the
+  measurement the pipeline was built for and had never run. Beside each rate is how
+  often the same detector fires on files that asked for some <em>other</em> smell.
+  The difference is what the prompt is actually causing; a detector whose two
+  numbers nearly coincide is reporting a base rate, not a detection.</p>
   <figure>
-    <img src="figures/fig2_induction_by_smell.png" alt="Induction rate by targeted smell">
-    <figcaption>Valid Python only.</figcaption>
+    <img src="figures/fig2_induction_by_smell.png" alt="Induction rate by targeted smell against base rate">
+    <figcaption>Valid Python only. Sorted by lift.</figcaption>
   </figure>
-  {table(["Targeted smell", "Files", "Produced"], smell_rows)}
+  {table(["Targeted smell", "Files", "Asked for", "Not asked", "Lift"], smell_rows)}
   <p>Models comply almost always when the smell is a local property of one function,
   and resist when it requires committing to a bad overall structure: asked for a God
-  Class they tend to split the work across several well-formed classes instead.</p>
+  Class they tend to split the work across several well-formed classes instead.
+  Three detectors — Dead Code, Inappropriate Intimacy and Speculative Generality —
+  fire nearly as often on files that did not ask for them, so their rates are shown
+  but should not be read as measurements.</p>
 </section>
 
 <section>
@@ -209,10 +220,21 @@ def build(analysis: Path, docs: Path):
 <section>
   <h2>How these numbers were produced</h2>
   <ul>
-    <li><strong>Scored with the project's own detector.</strong>
-    <code>detector/smell_detector.py</code> covers eight of the twenty-five targeted
-    smells. The other seventeen have no detector and are excluded from induction
-    figures rather than counted as misses.</li>
+    <li><strong>Scored with the project's own detector, extended.</strong>
+    <code>detector/smell_detector.py</code> covered eight of the twenty-five
+    targeted smells, which capped these figures at a third of the corpus.
+    <code>detector/extended_smells.py</code> adds thirteen more, taking coverage to
+    21 of 25 and 85% of files. Four remain out of reach of any single-file rule —
+    Shotgun Surgery needs change history, Incomplete Library Class needs the
+    library's intent, Alternative Classes needs semantic equivalence, and Primitive
+    Obsession needs a judgement about what deserves a type. They are excluded rather
+    than counted as misses.</li>
+    <li><strong>Each detector is checked against its own base rate.</strong> Every
+    threshold here is a heuristic, so each is measured on files that targeted a
+    different smell. Thresholds were then calibrated against that: the Temporary
+    Field rule originally required the attribute to be absent from
+    <code>__init__</code>, which excluded the smell's commonest form and left it
+    firing on 1% of its own targets.</li>
     <li><strong>Conditioned on syntax validity.</strong> Every quality figure is
     given twice, over all files and over files that parse.</li>
     <li><strong>Matched prompt set.</strong> Only prompts generated in all four

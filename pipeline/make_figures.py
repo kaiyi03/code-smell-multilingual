@@ -117,36 +117,48 @@ def fig1(rows, out):
 
 
 def fig2(rows, out):
-    """Induction rate per targeted smell."""
-    rows = sorted(rows, key=lambda r: num(r, "induction_valid"))
-    labels = [r["target_smell"] for r in rows]
-    vals = [num(r, "induction_valid") for r in rows]
-    ns = [int(num(r, "n_covered", 0)) for r in rows]
+    """Induction rate per smell, against the rate when nobody asked for it.
 
-    fig, ax = plt.subplots(figsize=(8.4, 4.4), facecolor=SURFACE)
+    Plotted as a pair of points joined by a line rather than as bars, because the
+    quantity that matters is the distance between them: a detector whose two
+    points nearly coincide is reporting how common the pattern is, not whether the
+    prompt caused it.
+    """
+    rows = sorted(rows, key=lambda r: num(r, "lift"))
+    labels = [r["target_smell"] for r in rows]
+    asked = [num(r, "induction_valid") for r in rows]
+    base = [num(r, "base_rate") for r in rows]
+    lift = [num(r, "lift") for r in rows]
+
+    fig, ax = plt.subplots(figsize=(9.2, 6.4), facecolor=SURFACE)
     y = np.arange(len(labels))
-    ax.barh(y, vals, 0.62, color=C_ADJ)
-    for i, (v, n) in enumerate(zip(vals, ns)):
-        # Keep a decimal when rounding would print 100% for something short of it
+    for i, (a, b) in enumerate(zip(asked, base)):
+        ax.plot([b, a], [i, i], color=GRID, lw=2.4, zorder=1,
+                solid_capstyle="round")
+    ax.scatter(base, y, s=46, color=C_RAW, zorder=3, label="not asked for (base rate)")
+    ax.scatter(asked, y, s=46, color=C_ADJ, zorder=3, label="asked for")
+    for i, (a, lf) in enumerate(zip(asked, lift)):
+        # Keep a decimal where rounding would print 100% for something short of it
         # -- "100%" reads as "always", and 99.7% is not always.
-        label = f"{v:.1f}%" if v < 100 and round(v) == 100 else f"{v:.0f}%"
-        ax.annotate(label, (v, i), textcoords="offset points",
-                    xytext=(5, 0), va="center", fontsize=9, color=INK)
-        ax.annotate(f"n={n}", (0, i), textcoords="offset points",
-                    xytext=(6, 0), va="center", fontsize=8, color="#ffffff")
+        shown = f"{a:.1f}%" if a < 100 and round(a) == 100 else f"{a:.0f}%"
+        ax.annotate(f"{shown}   +{lf:.0f}", (a, i), textcoords="offset points",
+                    xytext=(9, 0), va="center", fontsize=8.5, color=INK)
     style(ax)
     ax.xaxis.grid(True, color=GRID, lw=0.8)
     ax.yaxis.grid(False)
     ax.set_yticks(y)
-    ax.set_yticklabels(labels, fontsize=9.5, color=INK)
-    ax.set_xlim(0, 108)
-    ax.set_xlabel("generations containing the smell the prompt asked for (%)",
-                  fontsize=9.5, color=INK)
-    ax.set_title("Models comply readily with some smell requests and resist others",
-                 fontsize=11.5, color=INK, loc="left", pad=10)
-    fig.text(0.008, 0.02, "Valid Python only. The 17 targeted smells with no "
-             "matching detector are not shown.", fontsize=8.5, color=MUTED, ha="left")
-    fig.tight_layout(rect=(0, 0.07, 1, 1))
+    ax.set_yticklabels([f"{l}  ⚠" if lf < 20 else l for l, lf in zip(labels, lift)],
+                       fontsize=9.5, color=INK)
+    ax.set_xlim(-2, 128)
+    ax.set_xticks([0, 25, 50, 75, 100])
+    ax.set_xlabel("generations containing the smell (%)", fontsize=9.5, color=INK)
+    ax.set_title("Which smells a model will produce on request — and which detectors\n"
+                 "can tell the difference", fontsize=11.5, color=INK, loc="left", pad=10)
+    ax.legend(frameon=False, fontsize=9, loc="lower right")
+    fig.text(0.008, 0.02, "Valid Python only. Numbers are the asked-for rate and the "
+             "lift over base rate. ⚠ marks a lift under 20 points — reported, not relied on.",
+             fontsize=8.5, color=MUTED, ha="left")
+    fig.tight_layout(rect=(0, 0.05, 1, 1))
     fig.savefig(out, dpi=200, facecolor=SURFACE)
     plt.close(fig)
     print(f"  wrote {out.name}")

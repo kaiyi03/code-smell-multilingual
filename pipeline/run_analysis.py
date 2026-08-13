@@ -61,6 +61,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from detector.smell_detector import detect_all_smells
+from detector.extended_smells import UNDETECTABLE, detect_extended_smells
 
 try:
     from radon.complexity import cc_visit
@@ -95,6 +96,7 @@ RUFF = _find_ruff()
 # Written out rather than fuzzy-matched: "Data Class" and "Data Clumps" are
 # different smells and a substring rule is one edit away from conflating them.
 DETECTOR_TO_DATASET = {
+    # detector/smell_detector.py
     "Long Method":          "Long Method",
     "Long Parameter List":  "Long Parameter List",
     "Duplicated Code":      "Duplicated Code",
@@ -103,6 +105,20 @@ DETECTOR_TO_DATASET = {
     "Magic Number":         "Magic Numbers/Strings",
     "Global State":         "Global State",
     "Data Class":           "Data Class",
+    # detector/extended_smells.py -- labels already match the dataset exactly
+    "Data Clumps":                       "Data Clumps",
+    "Message Chains":                    "Message Chains",
+    "Feature Envy":                      "Feature Envy",
+    "Middle Man":                        "Middle Man",
+    "Lazy Class":                        "Lazy Class",
+    "Switch Statements":                 "Switch Statements",
+    "Dead Code":                         "Dead Code",
+    "Temporary Field":                   "Temporary Field",
+    "Inappropriate Intimacy":            "Inappropriate Intimacy",
+    "Comments (as smell indicator)":     "Comments (as smell indicator)",
+    "Refused Bequest":                   "Refused Bequest",
+    "Speculative Generality":            "Speculative Generality",
+    "Parallel Inheritance Hierarchies":  "Parallel Inheritance Hierarchies",
 }
 DATASET_TO_DETECTOR = {v: k for k, v in DETECTOR_TO_DATASET.items()}
 
@@ -203,10 +219,11 @@ def score_file(path, src, ruff_codes, prompts):
     row["undefined_name"] = sum(1 for c in ruff_codes if c == "F821")
     row["unused_var"] = sum(1 for c in ruff_codes if c == "F841")
 
-    # --- the project's own detector: what the study is actually asking
+    # --- the project's own detector plus the extension: what the study is asking
     det = detect_all_smells(src)
-    found = set(det["smell_types_detected"])
-    row["n_smells"] = det["total_smells"]
+    ext = detect_extended_smells(src)
+    found = set(det["smell_types_detected"]) | {s["smell"] for s in ext}
+    row["n_smells"] = det["total_smells"] + len(ext)
     row["smells_found"] = ";".join(sorted(found))
 
     # Was the smell the prompt asked for actually produced? Blank when no
@@ -359,13 +376,26 @@ def main():
                for m in models for l in langs
                if any(r["model"] == m and r["lang"] == l for r in agg)])
 
-    # Induction rate per targeted smell -- the study's actual question.
+    # Induction rate per targeted smell -- the study's actual question -- with a
+    # discrimination check beside it. A detector that fires just as often on files
+    # nobody asked for that smell is not detecting anything; it is a base rate
+    # wearing the smell's name, and the lift column makes that visible.
     by_smell = []
+    valid = [r for r in agg if r["syntax_ok"]]
     for label in sorted(DATASET_TO_DETECTOR):
+        detector_label = DATASET_TO_DETECTOR[label]
         g = [r for r in agg if label in r["target_smells"].split(";")]
         if not g:
             continue
         row = summarise(g, {"target_smell": label})
+
+        off = [r for r in valid if label not in r["target_smells"].split(";")]
+        fires = sum(1 for r in off if detector_label in r["smells_found"].split(";"))
+        base = round(100.0 * fires / len(off), 2) if off else ""
+        row["base_rate"] = base
+        row["lift"] = (round(row["induction_valid"] - base, 2)
+                       if row["induction_valid"] != "" and base != "" else "")
+
         for l in langs:
             gl = [r for r in g if r["lang"] == l and r["syntax_ok"]]
             row[f"induction_{l}"] = _pct(gl, "target_hit")
@@ -402,16 +432,26 @@ def main():
     print("\n" + "=" * 74)
     print("INDUCTION RATE -- prompt asks for the smell, detector confirms it")
     print("=" * 74)
-    print(f"{'targeted smell':28s}{'files':>7s}{'all':>8s}{'valid only':>12s}")
-    for r in sorted(by_smell, key=lambda x: -(x["induction_valid"] or 0)):
-        print(f"  {r['target_smell']:26s}{r['n_covered']:7d}"
-              f"{r['induction_all']:7.1f}%{r['induction_valid']:11.1f}%")
+    print(f"  {'targeted smell':34s}{'files':>7s}{'asked':>8s}{'not asked':>11s}{'lift':>8s}")
+    for r in sorted(by_smell, key=lambda x: -(x["lift"] if x["lift"] != "" else -999)):
+        flag = "" if (r["lift"] or 0) >= 20 else "   <- weak"
+        print(f"  {r['target_smell']:34s}{r['n_covered']:7d}"
+              f"{r['induction_valid']:7.1f}%{r['base_rate']:10.1f}%"
+              f"{r['lift']:+8.1f}{flag}")
+    print("\n  'not asked' is how often the detector fires on files targeting some")
+    print("  other smell. Lift is the difference: a detector with low lift is")
+    print("  reporting a base rate, not detecting what it claims to.")
+
     cov = [r for r in agg if r["target_covered"]]
     print(f"\n  {len(cov)} of {len(agg)} files target a smell the detector covers "
           f"({100 * len(cov) / len(agg):.0f}%).")
     uncovered = sorted({t for r in agg for t in r["target_smells"].split(";")
                         if t and t not in DATASET_TO_DETECTOR})
-    print(f"  {len(uncovered)} targeted smells have no detector: {', '.join(uncovered)}")
+    print(f"  {len(uncovered)} targeted smells still have no detector: "
+          f"{', '.join(uncovered)}")
+    if uncovered and sorted(uncovered) != sorted(UNDETECTABLE):
+        print(f"  (detector/extended_smells.py declares these unreachable by a "
+              f"single-file rule: {', '.join(UNDETECTABLE)})")
 
 
 if __name__ == "__main__":
