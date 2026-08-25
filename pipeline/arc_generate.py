@@ -141,6 +141,16 @@ def main():
     if not hasattr(_iu, "is_torch_fx_available"):
         _iu.is_torch_fx_available = lambda: False
 
+    # Same model, second incompatibility: its generation loop reads
+    # past_key_values.seen_tokens, an attribute DynamicCache dropped in favour of
+    # get_seq_length(). Restoring it as a property is exactly what it used to be.
+    try:
+        from transformers.cache_utils import DynamicCache
+        if not hasattr(DynamicCache, "seen_tokens"):
+            DynamicCache.seen_tokens = property(lambda self: self.get_seq_length())
+    except ImportError:
+        pass
+
     outdir = Path(args.out_root) / args.model / args.lang
     (outdir / "code").mkdir(parents=True, exist_ok=True)
     results = outdir / "results.jsonl"
