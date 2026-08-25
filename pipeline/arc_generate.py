@@ -133,6 +133,14 @@ def main():
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
+    # DeepSeek-Coder-V2-Lite ships its own modelling code via trust_remote_code,
+    # written against a transformers that still exported is_torch_fx_available.
+    # Newer releases dropped it, so the import fails before the model can load.
+    # The symbol only gates an optional tracing path, so a False stub is safe.
+    import transformers.utils.import_utils as _iu
+    if not hasattr(_iu, "is_torch_fx_available"):
+        _iu.is_torch_fx_available = lambda: False
+
     outdir = Path(args.out_root) / args.model / args.lang
     (outdir / "code").mkdir(parents=True, exist_ok=True)
     results = outdir / "results.jsonl"
@@ -156,7 +164,15 @@ def main():
         return
 
     print(f"loading {cfg['hf_model_id']}", flush=True)
-    tok = AutoTokenizer.from_pretrained(cfg["hf_model_id"], trust_remote_code=True)
+    # Yi-Coder ships only a sentencepiece tokenizer.model with no tokenizer.json,
+    # and transformers 5.x misidentifies it as a tiktoken file, then fails parsing
+    # it. Loading the slow tokenizer reads it with sentencepiece as intended.
+    try:
+        tok = AutoTokenizer.from_pretrained(cfg["hf_model_id"], trust_remote_code=True)
+    except Exception as e:
+        print(f"  fast tokenizer failed ({type(e).__name__}), retrying slow", flush=True)
+        tok = AutoTokenizer.from_pretrained(cfg["hf_model_id"], trust_remote_code=True,
+                                            use_fast=False)
     model = AutoModelForCausalLM.from_pretrained(
         cfg["hf_model_id"], torch_dtype=torch.bfloat16, device_map="auto",
         trust_remote_code=True)
