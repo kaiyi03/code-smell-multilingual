@@ -22,6 +22,14 @@
 
 set -euo pipefail
 source ~/smell-env.sh
+# Yi-Coder needs an older transformers: 5.x classifies its sentencepiece
+# tokenizer.model as a tiktoken file and fails parsing it. GEN_VENV points a job
+# at ~/yi-venv, which pins transformers 4.46 and inherits torch from smell-venv
+# via a .pth file, so there is only one CUDA stack on disk.
+if [ -n "${GEN_VENV:-}" ]; then
+  source "$GEN_VENV/bin/activate"
+  echo "venv: $GEN_VENV"
+fi
 export HF_HOME=/data/engs-applied-machine-learning/some5943/hf
 
 REPO=${REPO:-~/code-smell-multilingual}
