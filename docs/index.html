@@ -70,6 +70,26 @@ a{color:var(--accent)}
 </header>
 
 <section>
+  <h2>What this page shows</h2>
+  <div class="callout">
+    <p style="margin-bottom:.7rem">Fourteen open-weight code models are given 426
+    prompts that ask them to <strong>write Python code containing a named bad
+    pattern</strong> — a code smell. The same prompts are machine-translated into
+    Spanish, French and Chinese, so prompt language is the variable. The question is
+    whether a model still produces the smell it was asked for, and whether that
+    changes with the language of the request.</p>
+    <p style="margin-bottom:.7rem"><strong>&ldquo;Valid Python&rdquo; below means the file
+    parses</strong> — Python can read its structure. It does not mean the code runs
+    correctly or passes tests; a file that fails to parse simply has nothing to
+    measure, which is why it is separated out.</p>
+    <p><strong>Status.</strong> These figures come from the completed pilot: 426
+    prompts in English and 75 per model in each other language. A full-size run at
+    426 prompts in all four languages is generating on the ARC cluster now and is
+    not included here.</p>
+  </div>
+</section>
+
+<section>
   <h2>The headline metric was measuring the wrong thing</h2>
   <p>The study's quality metric is ruff violations per 100 lines. When a model
   emits something that does not parse, the line count collapses and the rate
@@ -92,10 +112,12 @@ a{color:var(--accent)}
   <h2>What models do when asked for a smell</h2>
   <p>Every prompt names a smell it wants the generated code to exhibit. Running the
   detector over the output asks whether that smell actually appears — the
-  measurement the pipeline was built for and had never run. Beside each rate is how
-  often the same detector fires on files that asked for some <em>other</em> smell.
-  The difference is what the prompt is actually causing; a detector whose two
-  numbers nearly coincide is reporting a base rate, not a detection.</p>
+  measurement the pipeline was built for and had never run. Beside each rate is a
+  control: how often the same detector fires on files that asked for a
+  <em>different</em> smell. Long methods, for instance, turn up in plenty of code
+  nobody asked to be long — so the second number is how common the pattern is
+  anyway, and only the gap between the two can be credited to the prompt. Where the
+  two numbers nearly coincide, the detector is not really detecting anything.</p>
   <figure>
     <img src="figures/fig2_induction_by_smell.png" alt="Induction rate by targeted smell against base rate">
     <figcaption>Valid Python only. Sorted by lift.</figcaption>
@@ -192,8 +214,13 @@ a{color:var(--accent)}
     <li><strong>Matched prompt set.</strong> Only prompts generated in all four
     languages are compared, so a language contrast cannot be a contrast between
     different task mixes.</li>
-    <li><strong>mamba-codestral-7b excluded</strong> from aggregates: 33% syntax
-    validity in English is a known model-loading failure, not model quality.</li>
+    <li><strong>mamba-codestral-7b is excluded</strong> from every aggregate. It
+    produces valid Python only 33% of the time <em>in English</em>, where every other
+    model manages 80–100%. That is a loading problem, not a quality one: this
+    architecture needs optional CUDA kernels that were not installed, so it ran on a
+    fallback path and emitted malformed output such as
+    <code>def update.inventory(self):</code>. Leaving it in would drag every language
+    average down for a reason that has nothing to do with the model.</li>
     <li><strong>Identifier drift — tested, and not a confound.</strong> Machine
     translation rewrote 19–30% of the API identifiers the prompts specify
     (<code>place_order</code> becomes <code>lugar_orden</code>). Compared within each
