@@ -101,6 +101,33 @@ def extract_python_code(response):
     return ""
 
 
+def build_generation_prompt(tok, system, user):
+    """Reproduce Run_Failed_Models.ipynb's prompt construction exactly.
+
+    This is not cosmetic. Models with a chat template get it applied; models
+    without one -- StarCoder2-instruct among them -- were trained on the Alpaca
+    style below, and giving them plain concatenated text instead measurably
+    degrades the output. An earlier version of this script did exactly that, and
+    starcoder2-3b scored 33.6% unparseable against 6.3% for the same model and
+    prompts under Colab, while deepseek-coder-1.3b (which has a template, so both
+    paths agreed) matched at 1.4% in both.
+    """
+    messages = [{"role": "system", "content": system},
+                {"role": "user", "content": user}]
+    tpl = getattr(tok, "chat_template", None)
+    if tpl and str(tpl).strip() and hasattr(tok, "apply_chat_template"):
+        try:
+            return tok.apply_chat_template(messages, tokenize=False,
+                                           add_generation_prompt=True)
+        except (ValueError, TypeError):
+            pass
+    parts = []
+    if system and str(system).strip():
+        parts.append(system.strip())
+    parts.append(user.strip())
+    return "### Instruction\n" + "\n\n".join(parts) + "\n### Response\n"
+
+
 # ---------------------------------------------------------------------------
 
 def load_prompts(lang, cache_dir):
@@ -210,6 +237,10 @@ def main():
                                      pad_token_id=tok.pad_token_id)
             elapsed = time.time() - t0
             raw = tok.decode(gen[0][enc["input_ids"].shape[1]:], skip_special_tokens=True)
+            # Byte-level BPE markers leak from some tokenizers; the notebook
+            # repairs them before extraction and so must this, or they read as
+            # syntax errors rather than as the spaces and newlines they are.
+            raw = raw.replace("Ġ", " ").replace("Ċ", "\n").replace("ĉ", "\t")
             code = extract_python_code(raw)
 
             (outdir / "code" / f"{p['id']}.py").write_text(code, encoding="utf-8")
