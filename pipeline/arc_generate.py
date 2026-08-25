@@ -171,10 +171,21 @@ def main():
     # Same model, second incompatibility: its generation loop reads
     # past_key_values.seen_tokens, an attribute DynamicCache dropped in favour of
     # get_seq_length(). Restoring it as a property is exactly what it used to be.
+    # Its bundled code targets transformers ~4.38 against the 5.x installed here,
+    # so the cache API has moved underneath it in several places. These restore the
+    # old names as thin aliases over the current ones.
+    #
+    # NOTE: this is the third such shim. If a fourth is needed, stop patching and
+    # give this one model its own virtualenv with transformers pinned to the
+    # version its code was written for -- chasing renamed methods one at a time
+    # risks a shim that is subtly wrong rather than merely absent.
     try:
         from transformers.cache_utils import DynamicCache
         if not hasattr(DynamicCache, "seen_tokens"):
             DynamicCache.seen_tokens = property(lambda self: self.get_seq_length())
+        if not hasattr(DynamicCache, "get_usable_length"):
+            DynamicCache.get_usable_length = (
+                lambda self, new_seq_length=None, layer_idx=0: self.get_seq_length(layer_idx))
     except ImportError:
         pass
 
