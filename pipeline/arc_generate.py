@@ -75,7 +75,9 @@ def _parses(code):
     try:
         ast.parse(code)
         return True
-    except SyntaxError:
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
+        # MemoryError is 'parser stack overflowed' on pathologically nested
+        # output; ValueError is null bytes. Both mean unparseable, not fatal.
         return False
 
 

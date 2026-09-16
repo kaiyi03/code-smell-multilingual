@@ -46,3 +46,4 @@ outputs/
 _analysis/per_file.csv
 _analysis_fullsize/per_file.csv
 _analysis_pilot9/per_file.csv
+_release/

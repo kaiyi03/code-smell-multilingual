@@ -192,7 +192,10 @@ def score_file(path, src, ruff_codes, prompts):
     try:
         ast.parse(src)
         row["syntax_ok"] = 1
-    except SyntaxError:
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
+        # Not just SyntaxError: a model can emit nesting deep enough to overflow
+        # the parser stack, which raises MemoryError. Letting that propagate took
+        # down a whole generation job and lost 199 files of a cell.
         row["syntax_ok"] = 0
 
     # --- size and structure
