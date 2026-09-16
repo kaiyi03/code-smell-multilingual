@@ -55,6 +55,24 @@ SYSTEM_PROMPTS = {
           "explications ni mise en forme Markdown.",
 }
 
+# The Python system prompts above are the natural-language axis. These are the
+# programming-language axis: the same instruction, naming the target language and
+# its file conventions. Kept deliberately parallel to the Python wording, since a
+# difference in how firmly the output format is demanded would show up as a
+# difference between programming languages.
+PLANG_SYSTEM = {
+    "java": "You are an expert Java developer. Generate clean, complete Java code "
+            "based on the given requirements. Output only the Java code without "
+            "explanations or markdown formatting.",
+    "cpp": "You are an expert C++ developer. Generate clean, complete C++ code "
+           "based on the given requirements. Output only the C++ code without "
+           "explanations or markdown formatting.",
+    "c": "You are an expert C developer. Generate clean, complete C code based on "
+         "the given requirements. Output only the C code without explanations or "
+         "markdown formatting.",
+}
+PLANG_EXT = {"python": "py", "java": "java", "cpp": "cpp", "c": "c"}
+
 # ---- extractor, from fix_extraction.ipynb (parse-validated) -----------------
 FENCE_BLOCK = re.compile(r"```[ \t]*[A-Za-z0-9_+\-.]*[ \t]*\r?\n(.*?)```", re.DOTALL)
 FENCE_TAIL = re.compile(r"```[ \t]*[A-Za-z0-9_+\-.]*[ \t]*\r?\n(.*)\Z", re.DOTALL)
@@ -81,7 +99,15 @@ def _parses(code):
         return False
 
 
-def extract_python_code(response):
+def extract_code(response, plang="python"):
+    """Pull the code out of a model response.
+
+    For Python the candidates are parse-validated -- the first one that compiles
+    wins, which is what makes the extractor robust to prose around the block. No
+    such check exists for Java, C++ or C here, so those fall back to the longest
+    fenced block, then the whole response. Validity for those languages is
+    measured later by tree-sitter rather than at extraction time.
+    """
     if not response:
         return ""
     cands = []
@@ -94,9 +120,14 @@ def extract_python_code(response):
         cands.append(tail.group(1))
     cands.append(response)
     cleaned = [_clean(c) for c in cands]
-    for c in cleaned:
-        if _parses(c):
-            return c + "\n"
+    if plang == "python":
+        for c in cleaned:
+            if _parses(c):
+                return c + "\n"
+    elif closed:
+        # No Python parser to validate against, so take the longest fenced block.
+        # Validity for these languages is judged later by tree-sitter, not here.
+        return max((_clean(c) for c in closed), key=len) + "\n"
     for c in cleaned:
         if c:
             return c + "\n"
@@ -132,7 +163,14 @@ def build_generation_prompt(tok, system, user):
 
 # ---------------------------------------------------------------------------
 
-def load_prompts(lang, cache_dir):
+def load_prompts(lang, cache_dir, plang="python"):
+    if plang != "python":
+        path = PROJECT_ROOT / "dataset" / f"prompts_core_{plang}.json"
+        if not path.exists():
+            sys.exit(f"no {plang} prompt set at {path}\n"
+                     f"  run: python -m dataset.port_prompts --lang {plang}")
+        with open(path, encoding="utf-8") as f:
+            return [dict(p, prompt_en=p["prompt"], lang=lang) for p in json.load(f)]
     if lang == "en":
         with open(DATASET, encoding="utf-8") as f:
             return [dict(p, prompt_en=p["prompt"], lang="en") for p in json.load(f)]
@@ -152,7 +190,17 @@ def main():
     ap.add_argument("--out-root", default=os.environ.get("OUT_ROOT", "outputs_arc"))
     ap.add_argument("--prompt-cache", default=os.environ.get("PROMPT_CACHE", "_prompts"))
     ap.add_argument("--max-new", type=int, default=int(os.environ.get("GEN_MAX_NEW", "2048")))
+    ap.add_argument("--plang", default=os.environ.get("GEN_PLANG", "python"),
+                    choices=list(PLANG_EXT),
+                    help="target programming language (default python)")
     args = ap.parse_args()
+
+    # The two axes are independent: --lang is the language the request is written
+    # in, --plang the language the answer should be in. Only the Python prompt set
+    # has been translated so far, so the others are English-only for now.
+    if args.plang != "python" and args.lang != "en":
+        sys.exit(f"--plang {args.plang} has no {args.lang} prompt set; "
+                 f"port_prompts.py produces English only")
 
     cfg = next((m for m in MODELS if m["id"] == args.model), None)
     if cfg is None:
@@ -191,7 +239,8 @@ def main():
     except ImportError:
         pass
 
-    outdir = Path(args.out_root) / args.model / args.lang
+    outdir = (Path(args.out_root) / args.model / args.lang if args.plang == "python"
+              else Path(args.out_root) / args.plang / args.model / args.lang)
     (outdir / "code").mkdir(parents=True, exist_ok=True)
     results = outdir / "results.jsonl"
 
@@ -204,7 +253,7 @@ def main():
                 except (json.JSONDecodeError, KeyError):
                     pass
 
-    prompts = load_prompts(args.lang, args.prompt_cache)
+    prompts = load_prompts(args.lang, args.prompt_cache, args.plang)
     if args.limit:
         prompts = prompts[:args.limit]
     todo = [p for p in prompts if p["id"] not in done]
@@ -230,7 +279,8 @@ def main():
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
-    system = SYSTEM_PROMPTS[args.lang]
+    system = (SYSTEM_PROMPTS[args.lang] if args.plang == "python"
+              else PLANG_SYSTEM[args.plang])
     started = time.time()
     with open(results, "a", encoding="utf-8") as out:
         for i, p in enumerate(todo, 1):
@@ -247,9 +297,10 @@ def main():
             # repairs them before extraction and so must this, or they read as
             # syntax errors rather than as the spaces and newlines they are.
             raw = raw.replace("Ġ", " ").replace("Ċ", "\n").replace("ĉ", "\t")
-            code = extract_python_code(raw)
+            code = extract_code(raw, args.plang)
 
-            (outdir / "code" / f"{p['id']}.py").write_text(code, encoding="utf-8")
+            ext = PLANG_EXT[args.plang]
+            (outdir / "code" / f"{p['id']}.{ext}").write_text(code, encoding="utf-8")
             out.write(json.dumps({
                 "prompt_id": p["id"], "model_id": args.model, "lang": args.lang,
                 "prompt": p["prompt"], "prompt_en": p.get("prompt_en", p["prompt"]),
