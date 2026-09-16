@@ -176,10 +176,19 @@ def build(analysis: Path, docs: Path):
     parses</strong> — Python can read its structure. It does not mean the code runs
     correctly or passes tests; a file that fails to parse simply has nothing to
     measure, which is why it is separated out.</p>
-    <p><strong>Status.</strong> These figures come from the completed pilot: 426
-    prompts in English and 75 per model in each other language. A full-size run at
-    426 prompts in all four languages is generating on the ARC cluster now and is
-    not included here.</p>
+    <p><strong>Scale.</strong> These figures are full-size: all 426 prompts in all
+    four languages, for nine models, generated on the ARC cluster. They replace an
+    earlier pilot that used 75 prompts per non-English language, and the change
+    matters — see the note below. Three models are absent: StarCoder2 is being
+    regenerated after a prompt-formatting bug, CodeLlama is a gated repository
+    awaiting access, and mamba-codestral fails to load correctly.</p>
+    <p><strong>The pilot was misleading, and not because it was small.</strong>
+    Holding the model set fixed and moving from 75 prompts per language to 426,
+    Chinese goes from 88.6% valid output to 97.7% — from apparently the worst
+    language to marginally the best. The pilot selected one prompt per smell per
+    difficulty level by taking the first alphabetically, which is a systematic
+    subsample rather than a random one. Any result quoted from it should be
+    re-checked here.</p>
   </div>
 </section>
 

@@ -1,0 +1,4 @@
+level,n_files,syntax_ok_pct,ruff_per_100loc_all,ruff_per_100loc_valid,mi_all,mi_valid,loc_mean,n_covered,induction_all,induction_valid
+advanced,1776,90.99,14.29,5.16,84.51,84.51,47.56,1508,49.27,52.84
+basic,1928,95.18,21.01,4.9,88.16,88.16,26.49,1636,51.59,53.54
+intermediate,1828,93.71,9.22,4.08,83.57,83.57,40.4,1552,49.1,51.33
