@@ -232,14 +232,7 @@ def main():
     started = time.time()
     with open(results, "a", encoding="utf-8") as out:
         for i, p in enumerate(todo, 1):
-            messages = [{"role": "system", "content": system},
-                        {"role": "user", "content": p["prompt"]}]
-            try:
-                text = tok.apply_chat_template(messages, tokenize=False,
-                                               add_generation_prompt=True)
-            except Exception:
-                # Some base-ish checkpoints ship no chat template.
-                text = f"{system}\n\n{p['prompt']}\n"
+            text = build_generation_prompt(tok, system, p["prompt"])
             enc = tok(text, return_tensors="pt").to(model.device)
             t0 = time.time()
             with torch.no_grad():
