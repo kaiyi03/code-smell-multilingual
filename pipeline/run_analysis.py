@@ -226,8 +226,22 @@ def score_file(path, src, ruff_codes, prompts):
     row["unused_var"] = sum(1 for c in ruff_codes if c == "F841")
 
     # --- the project's own detector plus the extension: what the study is asking
-    det = detect_all_smells(src)
-    ext = detect_extended_smells(src)
+    # Belt and braces. Each detector guards its own parse, but a single
+    # pathological generation must never be able to abort a 19,000-file run --
+    # that has happened twice, and the cost is hours of GPU output going
+    # unscored. A file no detector can read scores as "nothing found", which is
+    # the same outcome as unparseable and is recorded by syntax_ok above.
+    try:
+        det = detect_all_smells(src)
+    except Exception as e:
+        print(f"  detector failed on {prompt_id}: {type(e).__name__}", file=sys.stderr)
+        det = {"smell_types_detected": [], "total_smells": 0}
+    try:
+        ext = detect_extended_smells(src)
+    except Exception as e:
+        print(f"  extended detector failed on {prompt_id}: {type(e).__name__}",
+              file=sys.stderr)
+        ext = []
     raw = set(det["smell_types_detected"]) | {s["smell"] for s in ext}
     # Normalise to the dataset's vocabulary here, so everything downstream is a
     # plain equality. check_global_state emits both "Global State" and "Global

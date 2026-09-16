@@ -189,7 +189,7 @@ def check_god_class(source: str) -> List[Dict]:
     results = []
     try:
         tree = ast.parse(source)
-    except SyntaxError:
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
         return results
 
     for node in ast.walk(tree):
@@ -234,7 +234,7 @@ def check_global_state(contents: List[str]) -> List[Dict]:
     results = []
     try:
         tree = ast.parse("".join(contents))
-    except SyntaxError:
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
         return results
 
     # Find module-level assignments (not inside functions/classes)
@@ -267,7 +267,7 @@ def check_data_class(source: str) -> List[Dict]:
     results = []
     try:
         tree = ast.parse(source)
-    except SyntaxError:
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
         return results
 
     for node in ast.walk(tree):

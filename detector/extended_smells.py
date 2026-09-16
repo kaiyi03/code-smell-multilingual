@@ -553,7 +553,7 @@ def detect_extended_smells(code: str) -> list:
     """Run the additional detectors. Returns [] if the source does not parse."""
     try:
         tree = ast.parse(code)
-    except SyntaxError:
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
         return []
     found = []
     found += check_data_clumps(tree)
