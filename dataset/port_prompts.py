@@ -91,22 +91,44 @@ def port(text, lang):
     return out
 
 
-def build(lang, prompts):
-    kept, dropped, flagged = [], [], 0
+def load_overrides():
+    path = HERE / "prompt_overrides.json"
+    if not path.exists():
+        return {}, set()
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    cleared = set(data.get("_no_change_needed", []))
+    by_id = {k: v for k, v in data.items() if not k.startswith("_")}
+    return by_id, cleared
+
+
+def build(lang, prompts, overrides, cleared):
+    kept, dropped, flagged, hand = [], [], 0, 0
     for p in prompts:
         smells = p.get("code_smells", [])
         if lang == "c" and any(s in CLASS_BASED for s in smells):
             dropped.append(p["id"])
             continue
-        text = port(p["prompt"], lang)
-        needs_review = bool(PY_SPECIFIC.search(p["prompt"]))
+
+        override = overrides.get(p["id"], {}).get(lang)
+        if override:
+            text, needs_review = override, False
+            hand += 1
+        else:
+            text = port(p["prompt"], lang)
+            # A flag survives only if nobody has looked at it. Listing an id under
+            # _no_change_needed is a record that it was read and the automatic
+            # port was right, which is different from never having been checked.
+            needs_review = (bool(PY_SPECIFIC.search(p["prompt"]))
+                            and p["id"] not in cleared)
         flagged += needs_review
         kept.append(dict(p,
                          prompt=text,
                          prompt_en_python=p["prompt"],
                          target_language=lang,
+                         hand_written=bool(override),
                          needs_review=needs_review))
-    return kept, dropped, flagged
+    return kept, dropped, flagged, hand
 
 
 def main():
@@ -120,10 +142,16 @@ def main():
         prompts = json.load(f)
     print(f"source: {len(prompts)} Python prompts\n")
 
-    print(f"{'language':10s}{'ported':>9s}{'dropped':>9s}{'needs review':>14s}")
+    overrides, cleared = load_overrides()
+    print(f"{len(overrides)} prompts have hand-written replacements, "
+          f"{len(cleared)} checked and left as ported\n")
+
+    print(f"{'language':10s}{'ported':>9s}{'dropped':>9s}{'hand-written':>14s}"
+          f"{'needs review':>14s}")
     for lang in langs:
-        kept, dropped, flagged = build(lang, prompts)
-        print(f"{LANG_NAME[lang]:10s}{len(kept):9d}{len(dropped):9d}{flagged:14d}")
+        kept, dropped, flagged, hand = build(lang, prompts, overrides, cleared)
+        print(f"{LANG_NAME[lang]:10s}{len(kept):9d}{len(dropped):9d}{hand:14d}"
+              f"{flagged:14d}")
         if not args.report:
             out = HERE / f"prompts_core_{lang}.json"
             with open(out, "w", encoding="utf-8") as f:

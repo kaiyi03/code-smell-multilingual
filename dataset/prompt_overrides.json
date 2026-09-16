@@ -1,0 +1,149 @@
+{
+  "_README": [
+    "Hand-written replacements for prompts whose Python version names an API or",
+    "type with no mechanical equivalent in the target language. port_prompts.py",
+    "flags these; this file resolves them.",
+    "",
+    "Two kinds of entry:",
+    "  - a language key ('java'/'cpp'/'c') gives replacement prompt text.",
+    "  - listing an id under '_no_change_needed' means it was read and the",
+    "    automatic port is correct; the flag was a false positive on a bare word",
+    "    like 'list' or 'self'.",
+    "",
+    "The goal is that the target-language prompt asks for the SAME smell with",
+    "idiomatic target-language machinery. Changing the smell would make the",
+    "languages incomparable, which is the one thing this phase must not do."
+  ],
+
+  "_no_change_needed": [
+    "comments_smell_basic_005",
+    "comments_smell_intermediate_002",
+    "deep_nesting_intermediate_004",
+    "shotgun_surgery_intermediate_002"
+  ],
+
+  "primitive_obsession_intermediate_003": {
+    "java": "Write a Java healthcare class that uses patientMrn (String), diagnosisCodes as List<String>, medicationCodes as List<String>, dosages as List<Double>, units as List<String> instead of proper domain types.",
+    "cpp": "Write a C++ healthcare class that uses patient_mrn (std::string), diagnosis_codes as std::vector<std::string>, medication_codes as std::vector<std::string>, dosages as std::vector<double>, units as std::vector<std::string> instead of proper domain types.",
+    "c": "Write a C healthcare translation unit that uses patient_mrn (char*), diagnosis_codes as an array of char*, medication_codes as an array of char*, dosages as an array of double, units as an array of char* instead of proper domain structs."
+  },
+
+  "primitive_obsession_advanced_002": {
+    "java": "Write a Java insurance system representing policies with primitives: policyNumber (String), effectiveDate (String), expirationDate (String), premium (double), coverageLimits as Map<String,Double>, deductibles as Map<String,Double>, status (String), policyholderInfo as Map<String,Map<String,String>>.",
+    "cpp": "Write a C++ insurance system representing policies with primitives: policy_number (std::string), effective_date (std::string), expiration_date (std::string), premium (double), coverage_limits as std::map<std::string,double>, deductibles as std::map<std::string,double>, status (std::string), policyholder_info as nested std::map<std::string,std::map<std::string,std::string>>.",
+    "c": "Write a C insurance system representing policies with primitives: policy_number (char*), effective_date (char*), expiration_date (char*), premium (double), coverage_limits as parallel arrays of char* and double, deductibles as parallel arrays, status (char*), policyholder_info as parallel arrays of char* keys and values."
+  },
+
+  "primitive_obsession_advanced_003": {
+    "java": "Write a Java clinical trial system using primitives: subjectId (String), siteId (String), visitWindowStart (String), visitWindowEnd (String), measurements as Map<String,Double>, adverseEvents as List<Map<String,String>>, protocolDeviations as List<String[]>.",
+    "cpp": "Write a C++ clinical trial system using primitives: subject_id (std::string), site_id (std::string), visit_window_start (std::string), visit_window_end (std::string), measurements as std::map<std::string,double>, adverse_events as std::vector<std::map<std::string,std::string>>, protocol_deviations as std::vector<std::pair<std::string,std::string>>.",
+    "c": "Write a C clinical trial system using primitives: subject_id (char*), site_id (char*), visit_window_start (char*), visit_window_end (char*), measurements as parallel arrays of char* and double, adverse_events as an array of char* field arrays, protocol_deviations as an array of char* pairs."
+  },
+
+  "primitive_obsession_advanced_004": {
+    "java": "Write a Java logistics system using primitives for shipments: trackingNumber (String), originCoords as double[], destCoords as double[], weight (double), weightUnit (String), dimensions as double[], carrierCode (String), serviceCode (String), statusHistory as List<String[]>.",
+    "cpp": "Write a C++ logistics system using primitives for shipments: tracking_number (std::string), origin_coords as std::pair<double,double>, dest_coords as std::pair<double,double>, weight (double), weight_unit (std::string), dimensions as std::array<double,3>, carrier_code (std::string), service_code (std::string), status_history as std::vector<std::pair<std::string,std::string>>.",
+    "c": "Write a C logistics system using primitives for shipments: tracking_number (char*), origin_coords as double[2], dest_coords as double[2], weight (double), weight_unit (char*), dimensions as double[3], carrier_code (char*), service_code (char*), status_history as an array of char* pairs."
+  },
+
+  "primitive_obsession_advanced_006": {
+    "java": "Write a Java insurance system representing policies with primitives: policyNumber (String), effectiveDate (String), expirationDate (String), premium (double), coverageLimits as Map<String,Double>, deductibles as Map<String,Double>, status (String), policyholderInfo as Map<String,Map<String,String>>.",
+    "cpp": "Write a C++ insurance system representing policies with primitives: policy_number (std::string), effective_date (std::string), expiration_date (std::string), premium (double), coverage_limits as std::map<std::string,double>, deductibles as std::map<std::string,double>, status (std::string), policyholder_info as nested std::map<std::string,std::map<std::string,std::string>>.",
+    "c": "Write a C insurance system representing policies with primitives: policy_number (char*), effective_date (char*), expiration_date (char*), premium (double), coverage_limits as parallel arrays of char* and double, deductibles as parallel arrays, status (char*), policyholder_info as parallel arrays of char* keys and values."
+  },
+
+  "lazy_class_basic_001": {
+    "java": "Write a Java class StringHelper with only one method capitalizeFirst that wraps String.substring and Character.toUpperCase.",
+    "cpp": "Write a C++ class StringHelper with only one method capitalize_first that wraps std::toupper on the first character."
+  },
+
+  "lazy_class_basic_002": {
+    "java": "Write a Java class DateFormatter with only one method formatDate that wraps DateTimeFormatter with a hardcoded pattern.",
+    "cpp": "Write a C++ class DateFormatter with only one method format_date that wraps std::put_time with a hardcoded format string."
+  },
+
+  "lazy_class_intermediate_005": {
+    "java": "Write a Java API package with a ResponseWrapper class that only wraps data in a Map, a StatusMapper class that only maps codes to messages, and a TimestampAdder class that only adds the current time to a Map.",
+    "cpp": "Write a C++ API header with a ResponseWrapper class that only wraps data in a std::map, a StatusMapper class that only maps codes to messages, and a TimestampAdder class that only adds the current time to a std::map."
+  },
+
+  "lazy_class_advanced_001": {
+    "java": "Write a Java trading system with minimal classes: TickerNormalizer (uppercases symbols), QuantityValidator (checks positive), PriceFormatter (rounds to tick size), SideMapper (maps buy/sell to 1/-1), and TimeInForceValidator (checks against an allowed List<String>).",
+    "cpp": "Write a C++ trading system with minimal classes: TickerNormalizer (uppercases symbols), QuantityValidator (checks positive), PriceFormatter (rounds to tick size), SideMapper (maps buy/sell to 1/-1), and TimeInForceValidator (checks against an allowed std::vector<std::string>)."
+  },
+
+  "lazy_class_advanced_005": {
+    "java": "Write a Java trading system with minimal classes: TickerNormalizer (uppercases symbols), QuantityValidator (checks positive), PriceFormatter (rounds to tick size), SideMapper (maps buy/sell to 1/-1), and TimeInForceValidator (checks against an allowed List<String>).",
+    "cpp": "Write a C++ trading system with minimal classes: TickerNormalizer (uppercases symbols), QuantityValidator (checks positive), PriceFormatter (rounds to tick size), SideMapper (maps buy/sell to 1/-1), and TimeInForceValidator (checks against an allowed std::vector<std::string>)."
+  },
+
+  "middle_man_basic_001": {
+    "java": "Write a Java class OrderService with methods getOrderTotal, getOrderItems and getOrderStatus that all just call the corresponding methods on this.orderRepository.",
+    "cpp": "Write a C++ class OrderService with methods get_order_total, get_order_items and get_order_status that all just call the corresponding methods on this->order_repository."
+  },
+
+  "middle_man_basic_002": {
+    "java": "Write a Java class UserManager that delegates all operations (create, update, delete, find) directly to this.userDao without adding any logic.",
+    "cpp": "Write a C++ class UserManager that delegates all operations (create, update, delete, find) directly to this->user_dao without adding any logic."
+  },
+
+  "middle_man_basic_003": {
+    "java": "Write a Java class PaymentGateway that simply forwards all method calls to this.paymentProcessor without any additional processing.",
+    "cpp": "Write a C++ class PaymentGateway that simply forwards all method calls to this->payment_processor without any additional processing."
+  },
+
+  "middle_man_basic_004": {
+    "java": "Write a Java class ConfigManager that only delegates get and set operations to this.configStore.",
+    "cpp": "Write a C++ class ConfigManager that only delegates get and set operations to this->config_store."
+  },
+
+  "middle_man_basic_006": {
+    "java": "Write a Java class OrderService with methods getOrderTotal, getOrderItems and getOrderStatus that all just call the corresponding methods on this.orderRepository.",
+    "cpp": "Write a C++ class OrderService with methods get_order_total, get_order_items and get_order_status that all just call the corresponding methods on this->order_repository."
+  },
+
+  "refused_bequest_basic_001": {
+    "java": "Write a Java class Stack that extends ArrayList but does not use most List methods such as add at index, remove, or subList.",
+    "cpp": "Write a C++ class Stack that inherits from std::vector but does not use most of its interface such as insert, erase, or random access."
+  },
+
+  "refused_bequest_basic_002": {
+    "java": "Write a Java class ReadOnlyConfig extending HashMap but throwing UnsupportedOperationException from put, putAll and remove.",
+    "cpp": "Write a C++ class ReadOnlyConfig inheriting from std::map but throwing std::logic_error from operator[], insert and erase."
+  },
+
+  "refused_bequest_basic_006": {
+    "java": "Write a Java class Stack that extends ArrayList but does not use most List methods such as add at index, remove, or subList.",
+    "cpp": "Write a C++ class Stack that inherits from std::vector but does not use most of its interface such as insert, erase, or random access."
+  },
+
+  "incomplete_library_class_intermediate_002": {
+    "java": "Write a Java financial class that wraps Apache Commons Math and java.time with financial calculations, time series analysis, and market data specific operations the libraries do not provide.",
+    "cpp": "Write a C++ financial class that wraps Eigen and std::chrono with financial calculations, time series analysis, and market data specific operations the libraries do not provide.",
+    "c": "Write a C financial translation unit that wraps the standard math and time libraries with financial calculations, time series analysis, and market data specific operations they do not provide."
+  },
+
+  "incomplete_library_class_intermediate_004": {
+    "java": "Write a Java scientific class that wraps Apache Commons Math with domain-specific operations for signal processing, uncertainty propagation, and unit handling.",
+    "cpp": "Write a C++ scientific class that wraps Eigen with domain-specific operations for signal processing, uncertainty propagation, and unit handling.",
+    "c": "Write a C scientific translation unit that wraps the standard math library with domain-specific operations for signal processing, uncertainty propagation, and unit handling."
+  },
+
+  "incomplete_library_class_advanced_001": {
+    "java": "Write a Java trading class that extensively wraps Apache Commons Math and java.time with financial market specific functionality including trading calendars, corporate actions, time zone handling, and market data alignment.",
+    "cpp": "Write a C++ trading class that extensively wraps Eigen, Boost and std::chrono with financial market specific functionality including trading calendars, corporate actions, time zone handling, and market data alignment.",
+    "c": "Write a C trading translation unit that extensively wraps the standard math and time libraries with financial market specific functionality including trading calendars, corporate actions, time zone handling, and market data alignment."
+  },
+
+  "incomplete_library_class_advanced_002": {
+    "java": "Write a Java clinical data class that wraps java.time, Jackson and the collections framework with healthcare-specific validations, HIPAA-compliant transformations, and clinical terminology mappings.",
+    "cpp": "Write a C++ clinical data class that wraps std::chrono, a JSON library and the standard containers with healthcare-specific validations, HIPAA-compliant transformations, and clinical terminology mappings.",
+    "c": "Write a C clinical data translation unit that wraps the standard time and string libraries with healthcare-specific validations, HIPAA-compliant transformations, and clinical terminology mappings."
+  },
+
+  "incomplete_library_class_advanced_004": {
+    "java": "Write a Java research class that wraps Apache Commons Math and the collections framework with reproducibility features, experiment tracking, and scientific metadata handling the base libraries lack.",
+    "cpp": "Write a C++ research class that wraps Eigen and Boost with reproducibility features, experiment tracking, and scientific metadata handling the base libraries lack.",
+    "c": "Write a C research translation unit that wraps the standard math library with reproducibility features, experiment tracking, and scientific metadata handling it lacks."
+  }
+}
