@@ -225,10 +225,12 @@ def main():
     # so the cache API has moved underneath it in several places. These restore the
     # old names as thin aliases over the current ones.
     #
-    # NOTE: this is the third such shim. If a fourth is needed, stop patching and
-    # give this one model its own virtualenv with transformers pinned to the
-    # version its code was written for -- chasing renamed methods one at a time
-    # risks a shim that is subtly wrong rather than merely absent.
+    # NOTE: a fourth incompatibility did turn up, so this model now runs in its
+    # own virtualenv with transformers pinned to 4.41, the version its bundled
+    # code was written against. These three shims are kept because the other
+    # thirteen models share this file and run on the current release, where the
+    # renamed symbols are genuinely absent; under the pinned venv they are
+    # no-ops. Anything further belongs in the pin, not here.
     try:
         from transformers.cache_utils import DynamicCache
         if not hasattr(DynamicCache, "seen_tokens"):
@@ -272,9 +274,24 @@ def main():
         print(f"  fast tokenizer failed ({type(e).__name__}), retrying slow", flush=True)
         tok = AutoTokenizer.from_pretrained(cfg["hf_model_id"], trust_remote_code=True,
                                             use_fast=False)
-    model = AutoModelForCausalLM.from_pretrained(
-        cfg["hf_model_id"], torch_dtype=torch.bfloat16, device_map="auto",
-        trust_remote_code=True)
+    load_kwargs = dict(torch_dtype=torch.bfloat16, device_map="auto",
+                       trust_remote_code=True)
+
+    # V2-Lite again, and this one is not a renamed symbol. Before running a
+    # trust_remote_code file, transformers scans it for imports and refuses to
+    # load if any are missing. V2-Lite names flash_attn inside an
+    # `if is_flash_attn_2_available()` branch, which is False here, so the import
+    # never executes -- but the scan is textual and does not know that. Dropping
+    # the name from the scanned list is not the same as faking the package:
+    # nothing in that branch is reachable. Attention is set to eager so the
+    # fallback is a recorded choice rather than something inferred at load time.
+    if "DeepSeek-Coder-V2" in cfg["hf_model_id"]:
+        import transformers.dynamic_module_utils as _dmu
+        _scan = _dmu.get_imports
+        _dmu.get_imports = lambda f: [i for i in _scan(f) if i != "flash_attn"]
+        load_kwargs["attn_implementation"] = "eager"
+
+    model = AutoModelForCausalLM.from_pretrained(cfg["hf_model_id"], **load_kwargs)
     model.eval()
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
