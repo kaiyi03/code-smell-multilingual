@@ -41,6 +41,37 @@ Eight of the 25 smells are defined in terms of classes. **C has no classes.**
 
 **Roughly: 21 of 25 measurable in Python, Java and C++; about 13 in C.**
 
+## What is actually implemented, as against measurable in principle
+
+The table above is the scoping analysis: which smells *could* be decided in each
+language by someone willing to write the checks. It is not what
+`detector/cross_language.py` decides today, and the gap is large enough that it
+has to be stated rather than left for a reader to discover.
+
+**The implemented cross-language detector decides six smells: Long Method, Long
+Parameter List, Deep Nesting, Magic Numbers/Strings, Switch Statements, and God
+Class / Large Class — the last in every language but C.** The authority is
+`APPLICABLE` in that module; this paragraph is a description of it, and the module
+is what runs.
+
+Those six are the ones a syntax tree answers directly, by counting nodes against a
+threshold. The other fifteen in the table are decidable in principle but need
+cross-procedural reasoning — which fields a method touches, whether a class
+forwards rather than does, whether two bodies are near-duplicates — and the Python
+implementations in `detector/extended_smells.py` lean on Python-specific structure
+that does not transfer by simply swapping grammars.
+
+What that costs the comparison: **114 of the 426 prompts target a smell the
+detector can decide, and 94 of C's 292.** Induction is reported over those files
+only. The remaining prompts are scored for syntax validity like any other file but
+contribute nothing to the induction figure, and are recorded as blank rather than
+as misses — counting "no detector" as "the model failed" would hand every language
+a failure rate proportional to how many prompts it was asked.
+
+So the cross-language arm answers a narrower question than the Python arm, on
+about a quarter of the prompt set. Extending the detector past these six would
+widen the arm rather than change its design, and is the obvious next piece of work.
+
 ## What follows
 
 1. **C is not a fourth column of the same table.** Any "smells per language"
