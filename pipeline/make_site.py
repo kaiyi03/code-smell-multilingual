@@ -19,6 +19,9 @@ from pathlib import Path
 LANG = {"en": "English", "es": "Spanish", "fr": "French", "zh": "Chinese"}
 ORDER = ["en", "es", "fr", "zh"]
 
+PLANG = {"python": "Python", "java": "Java", "cpp": "C++", "c": "C"}
+PORDER = ["python", "java", "cpp", "c"]
+
 
 def read(p):
     with open(p, encoding="utf-8") as f:
@@ -80,6 +83,10 @@ thead th{color:var(--ink-3);font-weight:600;font-size:.69rem;letter-spacing:.06e
 tbody tr:last-child td{border-bottom:none}
 .hi{color:var(--warn);font-weight:700}
 .lo{color:var(--good)}
+/* A cell that cannot be asked, as against one that was asked and came back zero:
+   God Class has no meaning in C, and showing 0 there would read as a finding. */
+.muted{color:var(--ink-3)}
+section h3{margin:1.7rem 0 .65rem}
 .callout{background:var(--surface-2);border-radius:6px;padding:1.05rem 1.25rem;
          font-size:.97rem;color:var(--ink-2)}
 .callout strong{color:var(--ink)}
@@ -96,7 +103,94 @@ def table(headers, rows):
     return f'<div class="scroll"><table><thead><tr>{h}</tr></thead><tbody>{b}</tbody></table></div>'
 
 
-def build(analysis: Path, docs: Path):
+def xlang_section(xlang: Path):
+    """The programming-language comparison, or nothing if it has not been run.
+
+    Returned empty rather than stubbed so the page never shows a heading with no
+    numbers under it. The scoring is a separate pass (pipeline/run_xlang_analysis)
+    because it uses a different instrument -- see that module's docstring.
+    """
+    matched_p = xlang / "by_plang_matched.csv"
+    if not matched_p.exists():
+        return ""
+    matched = {r["plang"]: r for r in read(matched_p)}
+    allp = {r["plang"]: r for r in read(xlang / "by_plang.csv")}
+    by_smell = read(xlang / "by_plang_smell.csv")
+    if not matched:
+        return ""
+
+    plangs = [p for p in PORDER if p in matched]
+    rows = []
+    for p in plangs:
+        m, a = matched[p], allp.get(p, {})
+        rows.append([PLANG[p], f(a, "n_files", 0), f(m, "n_files", 0),
+                     f(m, "syntax_ok_pct", 1, "%"), f(m, "n_decidable", 0),
+                     f(m, "induction_valid", 1, "%")])
+    lang_table = table(["Language", "Files", "Matched", "Valid", "Decidable",
+                        "Induction"], rows)
+
+    # Lift per smell per language. The raw induction rate is not comparable across
+    # languages -- identical thresholds do not give identical base rates -- so lift
+    # is what is shown side by side, with the rate it is computed from beside it.
+    smells = sorted({r["target_smell"] for r in by_smell})
+    srows = []
+    for s in smells:
+        cells = [s]
+        for p in plangs:
+            hit = [r for r in by_smell if r["target_smell"] == s and r["plang"] == p]
+            if not hit:
+                cells.append('<span class="muted">n/a</span>')
+                continue
+            r = hit[0]
+            rate = f(r, "induction_valid", 0, "%")
+            try:
+                lift = float(r["lift"])
+            except (ValueError, TypeError, KeyError):
+                # No off-target files to compare against, so the lift is unknown --
+                # but the induction rate is not, and dropping both would hide a
+                # number we have.
+                cells.append(f'{rate} <span class="muted">(n/a)</span>')
+                continue
+            cls = "hi" if lift < 20 else "lo"
+            cells.append(f'{rate} <span class="{cls}">({lift:+.0f})</span>')
+        srows.append(cells)
+    smell_table = table(["Targeted smell"] + [PLANG[p] for p in plangs], srows)
+
+    return f"""
+<section>
+  <h2>The same smells asked for in four programming languages</h2>
+  <p>Every figure here comes from one detector — <code>detector/cross_language.py</code>,
+  built on tree-sitter — applied to all four languages with one set of thresholds.
+  The alternative, PMD for Java and clang-tidy for C, would have given each
+  language its own definition of “long method” and produced numbers that cannot be
+  set beside each other.</p>
+  {lang_table}
+  <p>Two denominators, and they differ. <em>Valid</em> is measured on every file.
+  <em>Induction</em> is measured only over the files whose targeted smell this
+  detector can decide in that language — six of the twenty-five smells are shaped
+  like something a syntax tree can answer, and the rest are not. A smell that
+  cannot be decided is left blank, never counted as a miss. <em>Matched</em> holds
+  the prompt set fixed across the four languages: C is asked 292 of the 426 prompts
+  because eight of the smells are defined over classes and C has none, so without
+  matching the C column would be scored on a different set of tasks.</p>
+  <p>These prompts are English only. The ported prompt sets were never translated,
+  so this table varies the programming language and holds the prompt language
+  fixed — it is not the sixteen-cell design of four prompt languages by four
+  programming languages.</p>
+  <h3>Induction by smell, with lift in brackets</h3>
+  {smell_table}
+  <p>The bracketed figure is lift: induction minus how often the same detector
+  fires on files that asked for some <em>other</em> smell, computed separately for
+  each language. It is the comparable column. Identical thresholds do not imply
+  identical base rates — a magic number is far commoner in C than in Python for
+  reasons that have nothing to do with the prompt — so reading the raw rates across
+  a row will mislead. Anything under +20 is marked, and means the detector is
+  largely reporting a base rate in that language.</p>
+</section>
+"""
+
+
+def build(analysis: Path, docs: Path, xlang: Path = None):
     matched = {r["lang"]: r for r in read(analysis / "by_lang_matched.csv")}
     by_smell = read(analysis / "by_smell.csv")
     by_ml = read(analysis / "by_model_lang.csv")
@@ -108,6 +202,7 @@ def build(analysis: Path, docs: Path):
     (docs / ".nojekyll").write_text("", encoding="utf-8")
 
     n_files = sum(int(float(r["n_files"])) for r in matched.values())
+    xlang_html = xlang_section(xlang) if xlang else ""
 
     # --- language table
     lang_rows = []
@@ -247,6 +342,7 @@ def build(analysis: Path, docs: Path):
   move. No account of “non-English prompts are harder” explains a model that
   survives Chinese but not Spanish.</p>
 </section>
+{xlang_html}
 
 <section>
   <h2>How the detector was extended, and how to check it</h2>
@@ -351,8 +447,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--analysis", default="_analysis")
     ap.add_argument("--docs", default="docs")
+    ap.add_argument("--xlang", default=None,
+                    help="cross-language analysis dir; the section is omitted "
+                         "entirely if this is not given or has not been scored")
     args = ap.parse_args()
-    build(Path(args.analysis), Path(args.docs))
+    build(Path(args.analysis), Path(args.docs),
+          Path(args.xlang) if args.xlang else None)
 
 
 if __name__ == "__main__":
