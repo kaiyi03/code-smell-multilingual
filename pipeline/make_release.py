@@ -30,6 +30,31 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LANGS = ("en", "es", "fr", "zh")
 FULL = 426
 
+# Keyed by model id and printed only for models that really have no output, so a
+# model that has since been generated cannot leave a stale excuse in the manifest.
+ABSENT_NOTES = {
+    "deepseek-coder-v2-lite": [
+        "- `deepseek-coder-v2-lite` — runs in an environment pinned to transformers",
+        "  4.41, the version its bundled modelling code was written against; under",
+        "  5.x three symbols it imports no longer exist. It also names flash_attn",
+        "  inside a branch that never executes, which the import scan cannot tell",
+        "  apart from a real dependency. Pinning is not a confound here: yi-coder",
+        "  already runs pinned for an unrelated tokenizer reason, and decoding is",
+        "  greedy either way.",
+    ],
+    "mamba-codestral-7b": [
+        "- `mamba-codestral-7b` — 20 files only, and they are not usable. Its replies",
+        "  restate the task rather than answering it ('The function should take a",
+        "  dictionary as input...'), and only 7 of 20 contain a definition anywhere.",
+        "  The cause is not established. It was generated on 2026-08-25, inside the",
+        "  window when template-less models were sent plain concatenated text rather",
+        "  than the Alpaca form they were trained on -- the same defect that made",
+        "  starcoder2-3b score 33.6% unparseable against 6.3% once corrected. Until",
+        "  it is regenerated on the fixed path, treat it as untested, not as a model",
+        "  that failed.",
+    ],
+}
+
 
 def survey(outputs: Path):
     """What is actually here, per model and language."""
@@ -92,20 +117,10 @@ def write_manifest(outputs: Path, rows, totals, dest: Path):
     if partial:
         lines.append("Partial: " + ", ".join(f"{m}" for m, _ in partial))
     if empty:
-        lines += [
-            "",
-            "Absent, and why:",
-            "",
-            "- `codellama-7b` — gated Meta repository, access not yet granted.",
-            "- `deepseek-coder-v2-lite` — being run in an environment pinned to",
-            "  transformers 4.41, the version its bundled modelling code was",
-            "  written against. Under 5.x it failed four ways: three renamed APIs",
-            "  and a tensor-shape mismatch in its attention mask. Pinning is not a",
-            "  confound here -- yi-coder already runs pinned for an unrelated",
-            "  tokenizer reason, and decoding is greedy either way.",
-            "- `mamba-codestral-7b` — loads, but emits call sites rather than",
-            "  definitions. Excluded from every aggregate rather than pooled.",
-        ]
+        lines += ["", "Absent, and why:", ""]
+        for m in empty:
+            lines += ABSENT_NOTES.get(
+                m, [f"- `{m}` — no generations in this package."])
     lines += [
         "",
         "## Caveats worth knowing before using this",
