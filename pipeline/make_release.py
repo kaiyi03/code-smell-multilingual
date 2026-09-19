@@ -30,6 +30,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LANGS = ("en", "es", "fr", "zh")
 FULL = 426
 
+# The cross-language arm and its source extensions. C is short because eight of the
+# 25 smells are defined over classes and C has none, so those prompts are dropped
+# rather than asked and scored as failures.
+PLANGS = {"java": ".java", "cpp": ".cpp", "c": ".c"}
+XFULL = {"java": 426, "cpp": 426, "c": 292}
+
 # Keyed by model id and printed only for models that really have no output, so a
 # model that has since been generated cannot leave a stale excuse in the manifest.
 ABSENT_NOTES = {
@@ -57,9 +63,11 @@ ABSENT_NOTES = {
 
 
 def survey(outputs: Path):
-    """What is actually here, per model and language."""
+    """What is actually here, per model and prompt language (the Python arm)."""
     rows, totals = [], Counter()
     for mdir in sorted(p for p in outputs.iterdir() if p.is_dir()):
+        if mdir.name in PLANGS:          # a cross-language tree, surveyed below
+            continue
         counts = {}
         for lang in LANGS:
             n = len(list((mdir / lang / "code").glob("*.py"))) if (mdir / lang / "code").is_dir() else 0
@@ -69,7 +77,28 @@ def survey(outputs: Path):
     return rows, totals
 
 
-def write_manifest(outputs: Path, rows, totals, dest: Path):
+def survey_xlang(outputs: Path):
+    """The cross-language arm, which sits one directory deeper.
+
+    Python was generated as <model>/<lang>/code; Java, C++ and C are
+    <plang>/<model>/<lang>/code. A survey that knows only the first layout reports
+    the second as absent, and the archive would ship without ever saying so.
+    """
+    rows, totals = [], Counter()
+    for plang, ext in PLANGS.items():
+        base = outputs / plang
+        if not base.is_dir():
+            continue
+        for mdir in sorted(p for p in base.iterdir() if p.is_dir()):
+            n = sum(len(list((ldir / "code").glob("*" + ext)))
+                    for ldir in mdir.iterdir()
+                    if ldir.is_dir() and (ldir / "code").is_dir())
+            rows.append((plang, mdir.name, n))
+            totals[plang] += n
+    return rows, totals
+
+
+def write_manifest(outputs: Path, rows, totals, dest: Path, xrows=(), xtotals=None):
     """A README inside the archive, so it is readable without this repo."""
     complete = [m for m, c in rows if all(c[l] == FULL for l in LANGS)]
     partial = [(m, c) for m, c in rows if 0 < sum(c.values()) < FULL * len(LANGS)]
@@ -84,16 +113,25 @@ def write_manifest(outputs: Path, rows, totals, dest: Path):
         "",
         "## What this is",
         "",
-        "Open-weight code models asked, in four human languages, to write Python",
-        "containing a named code smell. 426 prompts covering 25 smells, generated",
-        "with greedy decoding at 2048 new tokens.",
+        "Open-weight code models asked to write code containing a named code smell.",
+        "426 prompts covering 25 smells, greedy decoding at 2048 new tokens.",
+        "",
+        "Two arms, and they vary different things:",
+        "",
+        "- **Prompt language.** The same Python task asked in English, Spanish,",
+        "  French and Chinese.",
+        "- **Target language.** The same English task asked for Python, Java, C++",
+        "  and C. English only -- the ported prompt sets were never translated, so",
+        "  this is not a four-by-four design.",
         "",
         "## Layout",
         "",
         "```",
         "outputs_arc/<model>/<lang>/code/<prompt_id>.py   extracted code, one per prompt",
         "outputs_arc/<model>/<lang>/results.jsonl         raw response, prompt, tokens, timing",
+        "outputs_arc/<plang>/<model>/en/code/…            the same, for java, cpp and c",
         "analysis/per_file.csv                            every file scored, one row each",
+        "analysis_xlang/per_file.csv                      the cross-language scores",
         "analysis/by_*.csv                                aggregates used by the results page",
         "prompts/prompts_core*.json                       the prompt sets, incl. ported ones",
         "```",
@@ -112,6 +150,25 @@ def write_manifest(outputs: Path, rows, totals, dest: Path):
     lines += [
         "",
         f"{len(complete)} models complete at {FULL} prompts in all four languages.",
+        "",
+        "### Cross-language arm (English prompts)",
+        "",
+        "| Language | Model | Files | Of |",
+        "|---|---|---:|---:|",
+    ]
+    for plang, model, n in xrows:
+        want = XFULL.get(plang, FULL)
+        lines.append(f"| {plang} | {model} | {n} | {want} |")
+    if xtotals:
+        lines.append("")
+        lines.append("Totals: " + ", ".join(f"{p} {xtotals[p]}" for p in PLANGS
+                                            if xtotals.get(p)))
+    lines += [
+        "",
+        "C is asked 292 prompts rather than 426: eight of the 25 smells are defined",
+        "over classes, which C does not have. Those prompts are dropped rather than",
+        "asked and scored as failures, which would have made C look artificially",
+        "clean. Any comparison including C must hold the prompt set fixed.",
         "",
     ]
     if partial:
@@ -144,6 +201,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--outputs", default="../outputs_arc")
     ap.add_argument("--analysis", default="_analysis_fullsize")
+    ap.add_argument("--xanalysis", default="_analysis_xlang",
+                    help="cross-language scores; skipped if it does not exist")
     ap.add_argument("--tag", default=f"data-{date.today().isoformat()}")
     ap.add_argument("--dry-run", action="store_true", help="build the archive, do not upload")
     args = ap.parse_args()
@@ -159,10 +218,20 @@ def main():
         print(f"{m:26s}" + "".join(f"{c[l] or '—':>7}" for l in LANGS))
     print(f"{'TOTAL':26s}" + "".join(f"{totals[l]:>7d}" for l in LANGS))
 
+    xrows, xtotals = survey_xlang(outputs)
+    if xrows:
+        print(f"\n{'cross-language':26s}{'files':>7s}{'of':>7s}")
+        for plang, model, n in xrows:
+            want = XFULL.get(plang, FULL)
+            flag = "" if n == want else "  <- short"
+            print(f"{plang + '/' + model:26s}{n:7d}{want:7d}{flag}")
+        print(f"{'TOTAL':26s}{sum(xtotals.values()):7d}")
+
     staging = PROJECT_ROOT / "_release"
     staging.mkdir(exist_ok=True)
     manifest = staging / "MANIFEST.md"
-    complete, partial, empty = write_manifest(outputs, rows, totals, manifest)
+    complete, partial, empty = write_manifest(outputs, rows, totals, manifest,
+                                              xrows, xtotals)
     print(f"\n{len(complete)} complete, {len(partial)} partial, {len(empty)} absent")
 
     archive = staging / f"code-smell-generations-{args.tag}.tar.gz"
@@ -173,6 +242,10 @@ def main():
         if analysis.is_dir():
             for f in sorted(analysis.glob("*.csv")):
                 tar.add(f, arcname=f"analysis/{f.name}")
+        xanalysis = (PROJECT_ROOT / args.xanalysis).resolve()
+        if xanalysis.is_dir():
+            for f in sorted(xanalysis.glob("*.csv")):
+                tar.add(f, arcname=f"analysis_xlang/{f.name}")
         for f in sorted((PROJECT_ROOT / "dataset").glob("prompts_core*.json")):
             tar.add(f, arcname=f"prompts/{f.name}")
     size_mb = archive.stat().st_size / 1e6
