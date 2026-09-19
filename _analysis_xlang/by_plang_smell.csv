@@ -1,0 +1,24 @@
+target_smell,plang,n_files,syntax_ok_pct,loc_mean,loc_mean_valid,n_decidable,induction_all,induction_valid,base_rate,lift
+Deep Nesting,python,234,98.29,31.04,30.54,234,50.85,51.3,1.39,49.91
+Deep Nesting,java,90,92.22,42.71,43.84,90,55.56,54.22,5.56,48.66
+Deep Nesting,cpp,90,80.0,74.52,53.38,90,43.33,47.22,5.53,41.69
+Deep Nesting,c,90,83.33,97.1,45.19,90,48.89,58.67,7.45,51.22
+God Class / Large Class,python,260,98.85,47.67,47.76,260,36.54,36.19,3.51,32.68
+God Class / Large Class,java,100,93.0,62.25,64.42,100,31.0,33.33,10.01,23.32
+God Class / Large Class,cpp,100,80.0,142.69,63.31,100,10.0,12.5,3.46,9.04
+Long Method,python,260,96.92,47.25,45.67,260,66.15,65.87,20.0,45.87
+Long Method,java,100,97.0,56.52,55.46,100,61.0,60.82,21.74,39.08
+Long Method,cpp,100,77.0,151.04,73.94,100,48.0,58.44,30.09,28.35
+Long Method,c,100,77.0,154.35,66.62,100,48.0,62.34,50.21,12.13
+Long Parameter List,python,260,96.92,31.63,30.07,260,99.62,100.0,26.62,73.38
+Long Parameter List,java,100,98.0,42.92,39.04,100,95.0,96.94,22.77,74.17
+Long Parameter List,cpp,100,79.0,127.66,50.25,100,64.0,77.22,16.25,60.97
+Long Parameter List,c,100,80.0,121.03,48.54,100,58.0,72.5,16.92,55.58
+Magic Numbers/Strings,python,234,97.86,19.66,19.98,234,97.01,97.38,27.48,69.9
+Magic Numbers/Strings,java,90,96.67,27.02,22.52,90,86.67,87.36,14.74,72.62
+Magic Numbers/Strings,cpp,90,87.78,36.62,31.19,90,94.44,94.94,30.12,64.82
+Magic Numbers/Strings,c,90,83.33,65.52,28.09,90,84.44,93.33,54.61,38.72
+Switch Statements,python,234,97.44,46.04,42.97,234,60.68,61.4,2.98,58.42
+Switch Statements,java,90,97.78,38.39,38.34,90,61.11,62.5,2.03,60.47
+Switch Statements,cpp,90,93.33,53.58,42.69,90,62.22,65.48,1.36,64.12
+Switch Statements,c,90,92.22,54.18,39.19,90,51.11,54.22,3.5,50.72

@@ -1,0 +1,5 @@
+plang,n_files,syntax_ok_pct,loc_mean,loc_mean_valid,n_decidable,induction_all,induction_valid
+python,5538,97.89,33.75,32.71,1482,68.42,68.51
+java,2130,96.76,43.71,42.78,570,64.91,66.12
+cpp,2130,86.62,76.89,45.31,570,52.98,59.45
+c,1460,86.03,86.99,43.78,470,57.87,67.95
