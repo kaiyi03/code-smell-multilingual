@@ -224,41 +224,80 @@ def detect(source, lang):
     return out
 
 
+def _alternatives(node):
+    """The else/elif parts of an if_statement, in whichever shape the grammar uses.
+
+    All three shapes are reachable through the `alternative` field, which is why
+    that is what this reads rather than child node types:
+
+        python   if_statement -> elif_clause, elif_clause, else_clause  (siblings)
+        c, cpp   if_statement -> else_clause -> if_statement            (nested)
+        java     if_statement -> if_statement                           (no wrapper)
+
+    Java is the one that has no wrapper node at all, so a check written against
+    `else_clause` finds nothing there and silently reports a chain length of one.
+    """
+    alts = [c for c in node.children if c.type in ("elif_clause", "else_clause")]
+    return alts or [c for c in node.children_by_field_name("alternative")]
+
+
+def _chain_length(node):
+    """Branches in the if/else-if chain rooted at this if_statement.
+
+    A trailing plain `else` counts as a branch in every language, which is what
+    the previous version got wrong: Python counted it and the brace languages did
+    not, so the same four-branch ladder scored 4 in Python and 3 in C and C++ --
+    one short of the threshold, in the one place where one short matters.
+    """
+    branches, cur, guard = 1, node, 0
+    while cur is not None and guard < 500:       # guard: generated code nests hard
+        guard += 1
+        nxt = None
+        for alt in _alternatives(cur):
+            if alt.type == "elif_clause":        # python's flat continuation
+                branches += 1
+                continue
+            # else_clause wrapping a nested if (c, cpp), the nested if itself
+            # (java), or a plain trailing else in any of them. Only DIRECT
+            # children count: `else { if (...) }` is a nested if inside a block,
+            # not another rung of this ladder.
+            inner = (alt if alt.type == "if_statement" else
+                     next((g for g in alt.named_children
+                           if g.type == "if_statement"), None))
+            branches += 1
+            if inner is not None:
+                nxt = inner
+        cur = nxt
+    return branches
+
+
 def _ladders(root, spec):
     """Count if / else-if chains, which the grammars shape differently.
 
-    Python hangs every `elif` off one if_statement as siblings, so the chain is
-    flat. C, C++ and Java have no `elif`: `else if` is an else_clause containing a
-    fresh if_statement, so the chain is a right-leaning nest. Walking only one of
-    those shapes silently reports zero for the other languages.
+    An if/else-if ladder is the same design problem as a switch, and Python had no
+    switch before 3.10, so without this the smell would be unmeasurable there. It
+    has to be counted identically in all four languages or the comparison measures
+    the grammar rather than the code.
     """
-    out, seen = [], set()
+    # An if_statement reachable as another if's alternative is a rung, not a new
+    # ladder. Collecting them first is clearer than mutating a seen-set mid-walk,
+    # and it cannot leave a rung counted twice.
+    rungs = set()
     for node in _walk(root):
-        if node.type != "if_statement" or id(node) in seen:
+        if node.type != "if_statement":
             continue
-        seen.add(id(node))
+        for alt in _alternatives(node):
+            inner = (alt if alt.type == "if_statement" else
+                     next((g for g in alt.named_children
+                           if g.type == "if_statement"), None))
+            if inner is not None:
+                rungs.add(inner.id)
 
-        # flat form: elif siblings
-        branches = 1 + sum(1 for c in node.children if c.type == "elif_clause")
-        if any(c.type == "else_clause" for c in node.children) and branches > 1:
-            branches += 1
-
-        # nested form: else { if ... }
-        cur = node
-        while True:
-            nxt = None
-            for c in cur.children:
-                if c.type == "else_clause":
-                    inner = [g for g in _walk(c) if g.type == "if_statement"]
-                    if inner:
-                        nxt = inner[0]
-                    break
-            if nxt is None or id(nxt) in seen:
-                break
-            seen.add(id(nxt))
-            branches += 1
-            cur = nxt
-
+    out = []
+    for node in _walk(root):
+        if node.type != "if_statement" or node.id in rungs:
+            continue
+        branches = _chain_length(node)
         if branches >= SWITCH_MIN_BRANCHES:
             out.append({"smell": "Switch Statements", "branches": branches,
                         "line_number": node.start_point[0] + 1,

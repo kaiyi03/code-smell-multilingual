@@ -76,6 +76,68 @@ CASES = {
 }
 
 
+# An if/else-if ladder is the same design problem as a switch, and it is the only
+# form the smell can take in Python before 3.10. The four grammars shape it three
+# different ways -- Python hangs elif clauses off one if_statement, C and C++ wrap
+# the continuation in an else_clause, and Java has no wrapper node at all -- so
+# "the same ladder counts the same everywhere" needs its own check. The table above
+# does not provide one: its Python fixture is a ladder but the other three are real
+# switch statements, so the ladder path went untested in Java, C++ and C, and a
+# Java ladder scored 1 branch instead of 4 for as long as that was true.
+def _ladder(n_conditions, trailing_else):
+    """The same ladder in four languages: n conditions, optionally a plain else."""
+    py = "def f(x):\n    if x == 0:\n        a = 0\n"
+    py += "".join(f"    elif x == {i}:\n        a = {i}\n"
+                  for i in range(1, n_conditions))
+    py += "    else:\n        a = 99\n" if trailing_else else ""
+
+    brace = "if (x == 0) { a = 0; }"
+    brace += "".join(f" else if (x == {i}) {{ a = {i}; }}"
+                     for i in range(1, n_conditions))
+    brace += " else { a = 99; }" if trailing_else else ""
+    return {"python": py,
+            "java": "class A { void f(int x) { " + brace + " } }",
+            "cpp": "void f(int x) { " + brace + " }",
+            "c": "void f(int x) { " + brace + " }"}
+
+
+def check_ladders():
+    fails = []
+    print(f"\n{'if/else ladder':26s}" + "".join(f"{l:>9s}" for l in LANGUAGES))
+    print("-" * (26 + 9 * len(LANGUAGES)))
+
+    # (label, conditions, trailing else, must it fire)
+    trials = [("4 branches", 3, True, True),      # 3 conditions + else == 4
+              ("4 conditions", 4, False, True),
+              ("3 branches", 2, True, False),     # below threshold in every language
+              ("2 conditions", 2, False, False)]
+    for label, n, els, want in trials:
+        srcs, cells = _ladder(n, els), []
+        for lang in LANGUAGES:
+            hits = [s for s in detect(srcs[lang], lang)
+                    if s["smell"] == "Switch Statements"]
+            got = bool(hits)
+            cells.append(("PASS" if got == want else "FAIL")
+                         + (f"({hits[0]['branches']})" if hits else ""))
+            if got != want:
+                fails.append(f"ladder/{label}/{lang}: "
+                             f"{'not detected' if want else 'fired below threshold'}")
+            # One ladder is one finding. Counting each rung separately would let a
+            # single long chain outvote every other file in the aggregate.
+            if len(hits) > 1:
+                fails.append(f"ladder/{label}/{lang}: reported {len(hits)} times")
+        print(f"{label:26s}" + "".join(f"{c:>9s}" for c in cells))
+
+    # `else { if (...) }` is a nested if inside a block, not another rung. Reading
+    # it as one would inflate every language that writes braces.
+    for lang, src in (("java", "class A { void f(int x){ if(x==0){} else { if(x==1){} } } }"),
+                      ("cpp", "void f(int x){ if(x==0){} else { if(x==1){} } }")):
+        if [s for s in detect(src, lang) if s["smell"] == "Switch Statements"]:
+            fails.append(f"ladder/nested-else/{lang}: block nesting read as a rung")
+    print("\nthe same ladder must count the same in all four languages")
+    return fails
+
+
 def main():
     fails = []
     print(f"{'smell':26s}" + "".join(f"{l:>9s}" for l in LANGUAGES))
@@ -101,6 +163,8 @@ def main():
             if not ok:
                 fails.append(f"{smell}/{lang}: not detected")
         print(f"{smell:26s}" + "".join(f"{c:>9s}" for c in cells))
+
+    fails += check_ladders()
 
     print("-" * (26 + 9 * len(LANGUAGES)))
     n = sum(len(v) for v in APPLICABLE.values())
