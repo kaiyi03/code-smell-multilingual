@@ -138,6 +138,47 @@ def check_ladders():
     return fails
 
 
+# The God Class fixture above writes every method inline, which is how Python and
+# Java are written and is not how C++ usually is. C++ declares members in the class
+# and defines them out of line as `int G::m() {...}`, leaving only a
+# field_declaration in the class body -- so a check that counts definitions saw a
+# fourteen-method class as empty, and C++ scored 12.5% against Java's 33.3% on the
+# same class written idiomatically.
+def check_cpp_class_shapes():
+    fails = []
+    decls = "\n".join(f"    int m{i}();" for i in range(14))
+    inline = "\n".join(f"    int n{i}() {{ return {i}; }}" for i in range(14))
+    trials = [
+        ("methods defined inline", f"class G {{\npublic:\n{inline}\n}};\n", True),
+        ("declarations only", f"class G {{\npublic:\n{decls}\n}};\n", True),
+        ("declared, defined out of line",
+         f"class G {{\npublic:\n{decls}\n}};\n"
+         + "\n".join(f"int G::m{i}() {{ return {i}; }}" for i in range(14)), True),
+        # Negatives. Counting every field_declaration would make any class with
+        # eleven data members a God Class, which is a different smell entirely.
+        ("fourteen data members",
+         "class D {\npublic:\n" + "\n".join(f"    int f{i};" for i in range(14))
+         + "\n};\n", False),
+        ("three methods, under threshold",
+         "class S {\npublic:\n" + "\n".join(f"    int m{i}();" for i in range(3))
+         + "\n};\n", False),
+    ]
+    print(f"\n{'C++ class shape':38s}{'verdict':>12s}{'methods':>10s}")
+    print("-" * 60)
+    for label, src, want in trials:
+        got = [s for s in detect(src, "cpp") if s["smell"].startswith("God Class")]
+        ok = bool(got) == want
+        n = got[0]["methods"] if got else 0
+        print(f"{label:38s}{('PASS' if ok else 'FAIL'):>12s}{n:>10d}")
+        if not ok:
+            fails.append(f"cpp class shape/{label}: "
+                         f"{'not detected' if want else 'false positive'}")
+        # One method declared and then defined is one method, not two.
+        if got and n != 14:
+            fails.append(f"cpp class shape/{label}: counted {n} methods, expected 14")
+    return fails
+
+
 def main():
     fails = []
     print(f"{'smell':26s}" + "".join(f"{l:>9s}" for l in LANGUAGES))
@@ -165,6 +206,7 @@ def main():
         print(f"{smell:26s}" + "".join(f"{c:>9s}" for c in cells))
 
     fails += check_ladders()
+    fails += check_cpp_class_shapes()
 
     print("-" * (26 + 9 * len(LANGUAGES)))
     n = sum(len(v) for v in APPLICABLE.values())

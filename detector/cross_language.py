@@ -82,6 +82,9 @@ SPEC = {
         "param_item": {"parameter_declaration", "optional_parameter_declaration",
                        "variadic_parameter_declaration"},
         "class": {"class_specifier", "struct_specifier"},
+        # C++ declares members in the class and defines them elsewhere; see
+        # _methods_of. Only field_declarations that declare a function count.
+        "member_decl": {"field_declaration"},
         "control": {"if_statement", "for_statement", "for_range_loop",
                     "while_statement", "do_statement", "try_statement",
                     "switch_statement"},
@@ -154,6 +157,32 @@ def _params_of(node, spec):
     return 0
 
 
+def _methods_of(node, spec):
+    """The methods belonging to a class, counting the shapes each language uses.
+
+    Python and Java put the body in the class, so a function node inside it is the
+    whole story. C++ usually does not: the idiomatic form declares members in the
+    class and defines them out of line as `void G::m() {...}`, which leaves nothing
+    but a field_declaration inside the class body. Counting only definitions saw
+    fourteen methods as zero, and C++ scored 12.5% on God Class against Java's
+    33.3% for what is the same class written the way the language expects.
+
+    Declarations are counted rather than the out-of-line definitions they pair
+    with, so a class cannot be counted twice for one method.
+    """
+    out = []
+    for c in _walk(node):
+        if c.type in spec["function"]:
+            out.append(c)
+        elif c.type in spec.get("member_decl", ()):
+            # A field_declaration is a method only when it declares a function;
+            # otherwise it is a data member and counting it would make any class
+            # with eleven fields a God Class.
+            if any(g.type == "function_declarator" for g in _walk(c)):
+                out.append(c)
+    return out
+
+
 def _nesting(node, spec):
     best = 0
 
@@ -198,7 +227,7 @@ def detect(source, lang):
                             "threshold": MAX_NESTING_DEPTH})
 
         elif node.type in spec["class"]:
-            methods = [c for c in _walk(node) if c.type in spec["function"]]
+            methods = _methods_of(node, spec)
             if len(methods) > MAX_CLASS_METHODS:
                 out.append({"smell": "God Class / Large Class",
                             "methods": len(methods),
