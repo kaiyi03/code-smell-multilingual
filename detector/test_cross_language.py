@@ -16,7 +16,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from detector.cross_language import APPLICABLE, LANGUAGES, detect
+from detector.cross_language import (APPLICABLE, LANGUAGES, OUT_OF_REACH,
+                                     detect)
 
 BODY = {
     "python": "\n".join(f"    x = x + {i}" for i in range(20)),
@@ -24,6 +25,9 @@ BODY = {
     "cpp": "\n".join(f"        x = x + {i};" for i in range(20)),
     "c": "\n".join(f"        x = x + {i};" for i in range(20)),
 }
+
+DUP_PY = "\n".join(f"    t = t + {i}" for i in range(12))
+DUP_BR = "\n".join(f"    t = t + {i};" for i in range(12))
 
 CASES = {
     "Long Method": {
@@ -72,6 +76,73 @@ CASES = {
         "cpp": "class G {\npublic:\n" + "\n".join(f"    int m{i}() {{ return {i}; }}"
                                                   for i in range(14)) + "\n};\n",
         "c": None,          # C has no classes; the detector must not claim otherwise
+    },
+    # --- second pass: the seven smells added after the first six. Each fixture is
+    # the same construct written the way each language writes it, because that is
+    # what the shared-threshold claim means -- and writing them the Python way is
+    # how the C++ God Class check came to miss every idiomatic C++ class.
+    "Message Chains": {
+        "python": "def f(a):\n    return a.b.c.d()\n",
+        "java": "class A { void f(){ a.b().c().d(); } }\n",
+        "cpp": "void f(){ a.b().c().d(); }\n",
+        # C reaches through pointers, so the chain is p->a->b->c rather than dots.
+        "c": "void f(struct P* p){ int z = p->a->b->c; }\n",
+    },
+    "Global State": {
+        # Spelled differently on purpose: a Java field is global only when static,
+        # a C or C++ file-scope variable is global by being there, and ALL_CAPS is
+        # Python's constant convention so it must not count.
+        "python": "counter = 0\ndef f():\n    return counter\n",
+        "java": "class A { static int counter = 0; }\n",
+        "cpp": "int counter = 0;\nvoid f(){ counter++; }\n",
+        "c": "int counter = 0;\nvoid f(){ counter++; }\n",
+    },
+    "Dead Code": {
+        "python": "def f():\n    return 1\n    x = 2\n",
+        "java": "class A { int f(){ return 1; int x = 2; } }\n",
+        "cpp": "int f(){ return 1; int x = 2; }\n",
+        "c": "int f(){ return 1; int x = 2; }\n",
+    },
+    "Comments (as smell indicator)": {
+        "python": "def f():\n" + "\n".join(f"    # x{i} = {i}" for i in range(8))
+                  + "\n    return 1\n",
+        "java": "class A { int f(){\n"
+                + "\n".join(f"    // int x{i} = {i};" for i in range(8))
+                + "\n    return 1; } }\n",
+        "cpp": "int f(){\n" + "\n".join(f"    // int x{i} = {i};" for i in range(8))
+               + "\n    return 1; }\n",
+        # Block comments, to check both comment node types are recognised.
+        "c": "int f(){\n" + "\n".join(f"    /* int x{i} = {i}; */" for i in range(8))
+             + "\n    return 1; }\n",
+    },
+    "Duplicated Code": {
+        # The two bodies differ only in the name of the variable, which a
+        # structural measure must still call duplicated.
+        "python": (f"def a(t):\n{DUP_PY}\n    return t\n"
+                   f"def b(u):\n{DUP_PY.replace('t', 'u')}\n    return u\n"),
+        "java": ("class A {\n  int a(int t){\n" + DUP_BR + "\n    return t;\n  }\n"
+                 "  int b(int u){\n" + DUP_BR.replace("t", "u")
+                 + "\n    return u;\n  }\n}\n"),
+        "cpp": ("int a(int t){\n" + DUP_BR + "\n  return t;\n}\n"
+                "int b(int u){\n" + DUP_BR.replace("t", "u") + "\n  return u;\n}\n"),
+        "c": ("int a(int t){\n" + DUP_BR + "\n  return t;\n}\n"
+              "int b(int u){\n" + DUP_BR.replace("t", "u") + "\n  return u;\n}\n"),
+    },
+    "Data Class": {
+        "python": ("class D:\n    def __init__(self):\n        self.x = 1\n"
+                   "        self.y = 2\n    def get_x(self):\n        return self.x\n"),
+        "java": ("class D { private int x; private int y;"
+                 " public int getX(){return x;} public int getY(){return y;} }\n"),
+        "cpp": ("class D { int x; int y;\npublic:\n  int getX(){return x;}\n"
+                "  int getY(){return y;}\n};\n"),
+        # A bare struct is ordinary C rather than a smell, so C is not asked.
+        "c": None,
+    },
+    "Lazy Class": {
+        "python": "class S:\n    pass\n",
+        "java": "class S { }\n",
+        "cpp": "class S { };\n",
+        "c": None,
     },
 }
 
@@ -184,6 +255,15 @@ def main():
     print(f"{'smell':26s}" + "".join(f"{l:>9s}" for l in LANGUAGES))
     print("-" * (26 + 9 * len(LANGUAGES)))
     for smell, per_lang in CASES.items():
+        # A smell can be withdrawn from APPLICABLE after its lift turns out to be a
+        # base rate -- Dead Code was. The fixture stays, because the check still
+        # runs and the test should be ready if the smell is ever re-admitted, but
+        # it is reported as withdrawn rather than counted as coverage.
+        if smell not in APPLICABLE:
+            why = OUT_OF_REACH.get(smell, "not currently claimed")
+            print(f"{smell:26s}" + f"{'--':>9s}" * len(LANGUAGES)
+                  + f"   withdrawn: {why}")
+            continue
         cells = []
         for lang in LANGUAGES:
             src = per_lang.get(lang)
@@ -210,7 +290,8 @@ def main():
 
     print("-" * (26 + 9 * len(LANGUAGES)))
     n = sum(len(v) for v in APPLICABLE.values())
-    print(f"{len(CASES)} smells x 4 languages = {n} applicable combinations")
+    print(f"{len(APPLICABLE)} smells across {len(LANGUAGES)} languages "
+          f"= {n} applicable combinations; {len(CASES)} have a fixture here")
     print("'n/a' is a smell that cannot exist in that language, not a miss.")
     if fails:
         print("\nFAILURES:")
