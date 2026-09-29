@@ -101,6 +101,17 @@ MODELS = [
         "code_specific": True,
         "chat_template": "codestral",
         "special_requirements": ["mamba-ssm", "causal-conv1d"],
+        # Needs Ampere or newer, and the reason is not performance. Mamba2's scan
+        # runs through mamba_chunk_scan_combined, a Triton kernel compiled at
+        # submission time, and in bfloat16 it emits .bf16 PTX instructions that
+        # ptxas rejects below sm_80. On this cluster that rules out p100 (sm_60),
+        # v100 (sm_70) and rtx8000 (sm_75), so roughly half the GPU fleet fails at
+        # kernel compilation rather than producing worse output. Submit with
+        # --gres=gpu:l40s:1, or a100/a6000/h100, otherwise the job is a coin flip.
+        # This is Triton JIT, so TORCH_CUDA_ARCH_LIST at build time has no effect
+        # on it -- rebuilding the ahead-of-time kernels more widely was tried first
+        # and changed nothing.
+        "min_compute_capability": 8.0,
     },
     {
         "id": "starcoder2-3b",
