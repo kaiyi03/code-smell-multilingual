@@ -14,7 +14,11 @@ Serve it by setting GitHub Pages to the main branch, /docs folder.
 import argparse
 import csv
 import shutil
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from detector.cross_language import APPLICABLE, OUT_OF_REACH
 
 LANG = {"en": "English", "es": "Spanish", "fr": "French", "zh": "Chinese"}
 ORDER = ["en", "es", "fr", "zh"]
@@ -103,6 +107,12 @@ def table(headers, rows):
     return f'<div class="scroll"><table><thead><tr>{h}</tr></thead><tbody>{b}</tbody></table></div>'
 
 
+def out_of_reach_list():
+    """The smells this detector does not claim, each with its reason."""
+    rows = [[f"<code>{s}</code>", why] for s, why in sorted(OUT_OF_REACH.items())]
+    return table(["Smell", "Why it is out of reach"], rows)
+
+
 def xlang_section(xlang: Path):
     """The programming-language comparison, or nothing if it has not been run.
 
@@ -156,6 +166,9 @@ def xlang_section(xlang: Path):
         srows.append(cells)
     smell_table = table(["Targeted smell"] + [PLANG[p] for p in plangs], srows)
 
+    n_dec, n_out = len(APPLICABLE), len(OUT_OF_REACH)
+    n_all = n_dec + n_out
+    out_of_reach = out_of_reach_list()
     return f"""
 <section>
   <h2>The same smells asked for in four programming languages</h2>
@@ -167,7 +180,7 @@ def xlang_section(xlang: Path):
   {lang_table}
   <p>Two denominators, and they differ. <em>Valid</em> is measured on every file.
   <em>Induction</em> is measured only over the files whose targeted smell this
-  detector can decide in that language — six of the twenty-five smells are shaped
+  detector can decide in that language: {n_dec} of the {n_all} smells are shaped
   like something a syntax tree can answer, and the rest are not. A smell that
   cannot be decided is left blank, never counted as a miss. <em>Matched</em> holds
   the prompt set fixed across the four languages: C is asked 292 of the 426 prompts
@@ -177,6 +190,13 @@ def xlang_section(xlang: Path):
   so this table varies the programming language and holds the prompt language
   fixed — it is not the sixteen-cell design of four prompt languages by four
   programming languages.</p>
+  <h3>What this detector cannot decide, and why</h3>
+  <p>{n_dec} of the {n_all} smells are measured above. The remaining {n_out} are
+  listed here with the reason, because a smell that is silently absent looks the
+  same as a smell that never occurred. Most need to resolve which object a piece
+  of code belongs to, which a syntax tree does not record; the last four are not
+  properties of one file at all.</p>
+  {out_of_reach}
   <h3>Induction by smell, with lift in brackets</h3>
   {smell_table}
   <p>The bracketed figure is lift: induction minus how often the same detector
@@ -202,6 +222,9 @@ def build(analysis: Path, docs: Path, xlang: Path = None):
     (docs / ".nojekyll").write_text("", encoding="utf-8")
 
     n_files = sum(int(float(r["n_files"])) for r in matched.values())
+    # Read off the aggregates rather than stated in the prose, so the page cannot
+    # claim a model count the tables contradict.
+    n_models = len({r["model"] for r in by_ml})
     xlang_html = xlang_section(xlang) if xlang else ""
 
     # --- language table
@@ -272,11 +295,13 @@ def build(analysis: Path, docs: Path, xlang: Path = None):
     correctly or passes tests; a file that fails to parse simply has nothing to
     measure, which is why it is separated out.</p>
     <p><strong>Scale.</strong> These figures are full-size: all 426 prompts in all
-    four languages, for nine models, generated on the ARC cluster. They replace an
-    earlier pilot that used 75 prompts per non-English language, and the change
-    matters — see the note below. Three models are absent: StarCoder2 is being
-    regenerated after a prompt-formatting bug, CodeLlama is a gated repository
-    awaiting access, and mamba-codestral fails to load correctly.</p>
+    four languages, for {n_models} models, generated on the ARC cluster. They
+    replace an earlier pilot that used 75 prompts per non-English language, and the
+    change matters, as the note below sets out. One model is absent:
+    mamba-codestral substitutes a wrong token roughly once every 140, so only 6 of
+    20 of its files parse. Five causes were tested; two were faults in this
+    pipeline and were fixed, and three were ruled out, leaving the published
+    checkpoint itself. The release notes record what was tested.</p>
     <p><strong>The pilot was misleading, and not because it was small.</strong>
     Holding the model set fixed and moving from 75 prompts per language to 426,
     Chinese goes from 88.6% valid output to 97.7% — from apparently the worst

@@ -48,11 +48,22 @@ language by someone willing to write the checks. It is not what
 `detector/cross_language.py` decides today, and the gap is large enough that it
 has to be stated rather than left for a reader to discover.
 
-**The implemented cross-language detector decides six smells: Long Method, Long
-Parameter List, Deep Nesting, Magic Numbers/Strings, Switch Statements, and God
-Class / Large Class — the last in every language but C.** The authority is
-`APPLICABLE` in that module; this paragraph is a description of it, and the module
-is what runs.
+**The implemented cross-language detector decides 12 smells: Long Method, Long
+Parameter List, Deep Nesting, Magic Numbers/Strings, Switch Statements, God Class,
+Duplicated Code, Global State, Message Chains, Comments-as-smell, Data Class and
+Lazy Class.** The last three apply to Python, Java and C++ but not C, which has no
+classes and where a bare struct is idiomatic rather than a smell. The authority is
+`APPLICABLE` in that module, and `OUT_OF_REACH` beside it lists the other 13 with
+the reason each is out of reach; this paragraph describes them and the module is
+what runs.
+
+A 13th was implemented and withdrawn. Dead Code was measured both ways it is
+usually defined, as statements after a return and as internal functions nothing
+calls, and it fired about as often on files that asked for some other smell:
+lift came out at +1.4, +0.6, -3.9 and -0.3 across the four languages. The Python
+`ast` detector reaches only +7.3 on the same smell, so two independent instruments
+both fail to separate it. That is evidence about the smell rather than about either
+detector, since "nobody uses this" is a property of a codebase and not of one file.
 
 Those six are the ones a syntax tree answers directly, by counting nodes against a
 threshold. The other fifteen in the table are decidable in principle but need

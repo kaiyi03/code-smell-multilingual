@@ -87,11 +87,13 @@ a{color:var(--accent)}
     correctly or passes tests; a file that fails to parse simply has nothing to
     measure, which is why it is separated out.</p>
     <p><strong>Scale.</strong> These figures are full-size: all 426 prompts in all
-    four languages, for nine models, generated on the ARC cluster. They replace an
-    earlier pilot that used 75 prompts per non-English language, and the change
-    matters — see the note below. Three models are absent: StarCoder2 is being
-    regenerated after a prompt-formatting bug, CodeLlama is a gated repository
-    awaiting access, and mamba-codestral fails to load correctly.</p>
+    four languages, for 13 models, generated on the ARC cluster. They
+    replace an earlier pilot that used 75 prompts per non-English language, and the
+    change matters, as the note below sets out. One model is absent:
+    mamba-codestral substitutes a wrong token roughly once every 140, so only 6 of
+    20 of its files parse. Five causes were tested; two were faults in this
+    pipeline and were fixed, and three were ruled out, leaving the published
+    checkpoint itself. The release notes record what was tested.</p>
     <p><strong>The pilot was misleading, and not because it was small.</strong>
     Holding the model set fixed and moving from 75 prompts per language to 426,
     Chinese goes from 88.6% valid output to 97.7% — from apparently the worst
@@ -168,7 +170,7 @@ a{color:var(--accent)}
   <div class="scroll"><table><thead><tr><th>Language</th><th>Files</th><th>Matched</th><th>Valid</th><th>Decidable</th><th>Induction</th></tr></thead><tbody><tr><td>Python</td><td>5538</td><td>1460</td><td>97.7%</td><td>800</td><td>71.9%</td></tr><tr><td>Java</td><td>2130</td><td>1460</td><td>96.5%</td><td>800</td><td>72.0%</td></tr><tr><td>C++</td><td>2130</td><td>1460</td><td>85.1%</td><td>800</td><td>73.9%</td></tr><tr><td>C</td><td>1460</td><td>1460</td><td>86.0%</td><td>800</td><td>73.9%</td></tr></tbody></table></div>
   <p>Two denominators, and they differ. <em>Valid</em> is measured on every file.
   <em>Induction</em> is measured only over the files whose targeted smell this
-  detector can decide in that language — six of the twenty-five smells are shaped
+  detector can decide in that language: 12 of the 25 smells are shaped
   like something a syntax tree can answer, and the rest are not. A smell that
   cannot be decided is left blank, never counted as a miss. <em>Matched</em> holds
   the prompt set fixed across the four languages: C is asked 292 of the 426 prompts
@@ -178,6 +180,13 @@ a{color:var(--accent)}
   so this table varies the programming language and holds the prompt language
   fixed — it is not the sixteen-cell design of four prompt languages by four
   programming languages.</p>
+  <h3>What this detector cannot decide, and why</h3>
+  <p>12 of the 25 smells are measured above. The remaining 13 are
+  listed here with the reason, because a smell that is silently absent looks the
+  same as a smell that never occurred. Most need to resolve which object a piece
+  of code belongs to, which a syntax tree does not record; the last four are not
+  properties of one file at all.</p>
+  <div class="scroll"><table><thead><tr><th>Smell</th><th>Why it is out of reach</th></tr></thead><tbody><tr><td><code>Alternative Classes with Different Interfaces</code></td><td>needs semantic equivalence</td></tr><tr><td><code>Data Clumps</code></td><td>needs parameter identity matched across signatures and types</td></tr><tr><td><code>Dead Code</code></td><td>fires as often on code that was not asked for it; see git history</td></tr><tr><td><code>Feature Envy</code></td><td>needs to resolve which object each field access belongs to</td></tr><tr><td><code>Inappropriate Intimacy</code></td><td>needs per-class field ownership across two classes</td></tr><tr><td><code>Incomplete Library Class</code></td><td>needs the library's intent</td></tr><tr><td><code>Middle Man</code></td><td>needs to tell a delegating call from a working one</td></tr><tr><td><code>Parallel Inheritance Hierarchies</code></td><td>needs two hierarchies compared by name</td></tr><tr><td><code>Primitive Obsession</code></td><td>a judgement about domain modelling, not a count</td></tr><tr><td><code>Refused Bequest</code></td><td>needs the parent's members, usually in another file</td></tr><tr><td><code>Shotgun Surgery</code></td><td>needs change history, not a syntax tree</td></tr><tr><td><code>Speculative Generality</code></td><td>needs to know an abstraction has one user</td></tr><tr><td><code>Temporary Field</code></td><td>needs to know a field is unset on most paths</td></tr></tbody></table></div>
   <h3>Induction by smell, with lift in brackets</h3>
   <div class="scroll"><table><thead><tr><th>Targeted smell</th><th>Python</th><th>Java</th><th>C++</th><th>C</th></tr></thead><tbody><tr><td>Comments (as smell indicator)</td><td>68% <span class="lo">(+43)</span></td><td>90% <span class="lo">(+59)</span></td><td>87% <span class="lo">(+56)</span></td><td>85% <span class="lo">(+45)</span></td></tr><tr><td>Data Class</td><td>43% <span class="lo">(+30)</span></td><td>96% <span class="lo">(+73)</span></td><td>81% <span class="lo">(+50)</span></td><td><span class="muted">n/a</span></td></tr><tr><td>Deep Nesting</td><td>51% <span class="lo">(+50)</span></td><td>54% <span class="lo">(+49)</span></td><td>47% <span class="lo">(+42)</span></td><td>59% <span class="lo">(+51)</span></td></tr><tr><td>Duplicated Code</td><td>75% <span class="lo">(+59)</span></td><td>80% <span class="lo">(+49)</span></td><td>85% <span class="lo">(+51)</span></td><td>79% <span class="lo">(+56)</span></td></tr><tr><td>Global State</td><td>80% <span class="lo">(+55)</span></td><td>69% <span class="lo">(+69)</span></td><td>89% <span class="lo">(+87)</span></td><td>97% <span class="lo">(+84)</span></td></tr><tr><td>God Class / Large Class</td><td>36% <span class="lo">(+33)</span></td><td>33% <span class="lo">(+23)</span></td><td>12% <span class="hi">(+9)</span></td><td><span class="muted">n/a</span></td></tr><tr><td>Lazy Class</td><td>94% <span class="lo">(+62)</span></td><td>87% <span class="lo">(+44)</span></td><td>87% <span class="lo">(+50)</span></td><td><span class="muted">n/a</span></td></tr><tr><td>Long Method</td><td>66% <span class="lo">(+46)</span></td><td>61% <span class="lo">(+39)</span></td><td>58% <span class="lo">(+28)</span></td><td>62% <span class="hi">(+12)</span></td></tr><tr><td>Long Parameter List</td><td>100% <span class="lo">(+73)</span></td><td>97% <span class="lo">(+74)</span></td><td>77% <span class="lo">(+61)</span></td><td>72% <span class="lo">(+56)</span></td></tr><tr><td>Magic Numbers/Strings</td><td>97% <span class="lo">(+70)</span></td><td>87% <span class="lo">(+73)</span></td><td>95% <span class="lo">(+65)</span></td><td>93% <span class="lo">(+39)</span></td></tr><tr><td>Message Chains</td><td>51% <span class="lo">(+48)</span></td><td>44% <span class="lo">(+38)</span></td><td>56% <span class="lo">(+56)</span></td><td>63% <span class="lo">(+63)</span></td></tr><tr><td>Switch Statements</td><td>61% <span class="lo">(+58)</span></td><td>62% <span class="lo">(+60)</span></td><td>65% <span class="lo">(+64)</span></td><td>54% <span class="lo">(+51)</span></td></tr></tbody></table></div>
   <p>The bracketed figure is lift: induction minus how often the same detector
