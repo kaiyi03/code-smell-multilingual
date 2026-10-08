@@ -97,9 +97,12 @@ a{color:var(--accent)}
   instead of a fenced code block, and the extractor cannot separate the code from the
   prose around it:</p>
   <div class="scroll"><table class=""><thead><tr><th>Model</th><th>Prompt language</th><th>Valid as scored</th><th>Valid without requiring a fence</th><th>Replies with no fence</th></tr></thead><tbody><tr><td>granite-3b-code</td><td>Spanish</td><td>49.3%</td><td><strong>89.2%</strong></td><td>43%</td></tr><tr><td>granite-8b-code</td><td>Spanish</td><td>26.8%</td><td><strong>93.2%</strong></td><td>72%</td></tr><tr><td>granite-8b-code</td><td>French</td><td>80.3%</td><td><strong>93.4%</strong></td><td>15%</td></tr></tbody></table></div>
-  <p>Whether a dropped fence counts as a failure depends on whether following the
-  requested format is part of the task. The scores on this page keep the stricter
-  reading.</p>
+  <p>The system prompt asks for code without Markdown formatting.
+  Of the 13 models, 12 ignore that and fence their code
+  anyway, which is what the extractor relies on; Granite in Spanish follows it but
+  adds explanation around the code. So the gap is the extractor's assumption rather
+  than a failure to follow the prompt. Scores here use the original extractor until
+  the full set is re-scored.</p>
 </section>
 
 <section>

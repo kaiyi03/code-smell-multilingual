@@ -104,8 +104,13 @@ def experiment1(analysis):
         density[ok] = 100.0 * sum(int(r["ruff_total"]) for r in g) / lines if lines else None
 
     extraction = []
+    n_fencers = 0
     ex_path = analysis / "extraction_check.csv"
     if ex_path.exists():
+        # Models that wrap at least 95% of their English replies in a fence, despite
+        # a system prompt that asks for no Markdown.
+        n_fencers = sum(1 for r in read(ex_path)
+                        if r["lang"] == "en" and num(r, "unfenced_pct") <= 5)
         for r in read(ex_path):
             gain = num(r, "valid_fence_free_pct") - num(r, "valid_scored_pct")
             if gain >= 5:
@@ -122,7 +127,8 @@ def experiment1(analysis):
     return {"matched": matched, "ci": intervals.by_group(per_file, "lang", ORDER),
             "density": density, "extraction": extraction, "affected": affected,
             "n_models": len(models), "n_files": len(per_file),
-            "worst_other": worst_other, "by_smell": read(analysis / "by_smell.csv")}
+            "worst_other": worst_other, "n_fencers": n_fencers,
+            "by_smell": read(analysis / "by_smell.csv")}
 
 
 def experiment2(xlang, root):
@@ -364,9 +370,12 @@ def build(analysis: Path, xlang: Path, docs: Path):
   instead of a fenced code block, and the extractor cannot separate the code from the
   prose around it:</p>
   {ex_table}
-  <p>Whether a dropped fence counts as a failure depends on whether following the
-  requested format is part of the task. The scores on this page keep the stricter
-  reading.</p>
+  <p>The system prompt asks for code without Markdown formatting.
+  Of the {e1['n_models']} models, {e1['n_fencers']} ignore that and fence their code
+  anyway, which is what the extractor relies on; {family} in Spanish follows it but
+  adds explanation around the code. So the gap is the extractor's assumption rather
+  than a failure to follow the prompt. Scores here use the original extractor until
+  the full set is re-scored.</p>
 </section>
 
 <section>
