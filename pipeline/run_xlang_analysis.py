@@ -168,6 +168,32 @@ def score_file(path, src, plang, prompts, decidable):
     return row
 
 
+# The generation cap, as pipeline/arc_generate.py sets it (--max-new, default 2048).
+# An answer that reaches it was stopped rather than finished, and in C and C++ that
+# is most of what fails to parse: 80% of broken C files reached it, against 21% of
+# working ones. Recording it per file lets the report separate "the model wrote
+# invalid code" from "the model was cut off mid-statement".
+OUTPUT_LIMIT = 2048
+
+
+def _tokens_by_prompt(code_dir):
+    """Tokens each answer used, from the untouched replies kept beside the code."""
+    path = code_dir.parent / "results.jsonl"
+    out = {}
+    if not path.exists():
+        return out
+    # errors="replace": a raw reply can carry bytes that are not UTF-8 (one Python
+    # reply does), and only the ASCII prompt_id and token count are read here.
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            try:
+                r = json.loads(line)
+                out[r["prompt_id"]] = int(r.get("output_tokens") or 0)
+            except (json.JSONDecodeError, KeyError, ValueError, TypeError):
+                pass
+    return out
+
+
 def collect(root):
     rows, prompt_cache = [], {}
     for plang, model, nat_lang, code_dir in discover(root):
@@ -178,6 +204,7 @@ def collect(root):
             prompt_cache[plang] = (load_prompts(plang), decidable_for(plang))
         prompts, decidable = prompt_cache[plang]
         print(f"  [{plang}/{model}/{nat_lang}] {len(files)} files", flush=True)
+        tokens = _tokens_by_prompt(code_dir)
         for f in files:
             try:
                 src = f.read_text(encoding="utf-8", errors="replace")
@@ -185,6 +212,9 @@ def collect(root):
                 continue
             row = score_file(f, src, plang, prompts, decidable)
             row["model"], row["lang"] = model, nat_lang
+            used = tokens.get(f.stem)
+            row["output_tokens"] = "" if used is None else used
+            row["hit_limit"] = "" if used is None else int(used >= OUTPUT_LIMIT)
             rows.append(row)
     return rows
 
@@ -244,13 +274,24 @@ def main():
         print(f"  excluded from aggregates: {', '.join(args.exclude)}")
 
     plangs = [p for p in LANGUAGES if any(r["plang"] == p for r in agg)]
-    models = sorted({r["model"] for r in agg})
 
     # The programming-language comparison is English-only: the ported prompt sets
     # were never translated, so a Spanish Java cell does not exist. Mixing the
     # Python arm's four natural languages into a contrast against English-only Java
     # would put the prompt language inside the programming-language effect.
-    en = [r for r in agg if r["lang"] == "en"]
+    #
+    # The same models in every language, too. The Python column is read from the
+    # prompt-language experiment, which ran 13 models; Java, C++ and C ran 5. The
+    # matched table below already required a model to appear in all four languages,
+    # but the per-smell table and the base rates used every English row, so Python
+    # was 13 models pooled against 5 elsewhere. Restricted to the same 5, no smell
+    # moved more than 5 points and no conclusion changed -- but a comparison between
+    # languages has to hold the model mix fixed or it is partly a comparison between
+    # models.
+    xmodels = {r["model"] for r in agg if r["plang"] != "python"}
+    en = [r for r in agg if r["lang"] == "en"
+          and (not xmodels or r["model"] in xmodels)]
+    models = sorted({r["model"] for r in en})
 
     # Matched subset: (model, prompt_id) present in EVERY programming language.
     # C drops the eight class-based smells, so without this the C column is scored

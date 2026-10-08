@@ -10,9 +10,11 @@ Three figures, each carrying one claim:
         for actually appear
   fig3  syntax validity by model and prompt language -- whether the language
         effect is general or belongs to particular models
+  fig4  the cross-language arm, smell by smell -- how far apart the four
+        programming languages are on each smell, which the flat average hides
 
 Usage:
-    python -m pipeline.make_figures --analysis _analysis
+    python -m pipeline.make_figures --analysis _analysis_fullsize --xlang _analysis_xlang
 """
 
 import argparse
@@ -209,9 +211,73 @@ def fig3(rows, out):
     print(f"  wrote {out.name}")
 
 
+# Okabe-Ito: four hues that stay distinct under the common colour-vision
+# deficiencies, which four arbitrary hues usually do not.
+PLANG_COLOUR = {"python": "#0072B2", "java": "#009E73", "cpp": "#E69F00", "c": "#D55E00"}
+PLANG_NAME = {"python": "Python", "java": "Java", "cpp": "C++", "c": "C"}
+SHORT = {"Comments (as smell indicator)": "Comments",
+         "God Class / Large Class": "God Class",
+         "Magic Numbers/Strings": "Magic Numbers"}
+
+
+def fig4(rows, out):
+    """Each smell's rate in each programming language, sorted by the gap.
+
+    The aggregate across smells is flat to within two points, and it is flat
+    because these differences cancel: drawn as an average it would show nothing.
+    One row per smell, one point per language, a bar from the lowest to the
+    highest, so the reader sees the spread rather than reconstructing it.
+    """
+    by = {}
+    for r in rows:
+        v = num(r, "induction_valid")
+        if v == v:                                   # skip blanks (NaN != NaN)
+            by.setdefault(r["target_smell"], {})[r["plang"]] = v
+    smells = sorted(by, key=lambda s: max(by[s].values()) - min(by[s].values()))
+
+    fig, ax = plt.subplots(figsize=(9.2, 6.2), facecolor=SURFACE)
+    for i, sm in enumerate(smells):
+        vals = by[sm]
+        lo, hi = min(vals.values()), max(vals.values())
+        ax.plot([lo, hi], [i, i], color=GRID, lw=4, zorder=1, solid_capstyle="round")
+        for pl, v in vals.items():
+            ax.scatter(v, i, s=58, color=PLANG_COLOUR[pl], zorder=3,
+                       edgecolor=SURFACE, linewidth=0.8)
+        ax.annotate(f"{hi - lo:.0f} pts", (104, i), va="center", fontsize=9,
+                    color=INK, annotation_clip=False)
+    # Name the two ends of the widest gap, which is the finding the eye starts on.
+    top = smells[-1]
+    vals = by[top]
+    for pl in (max(vals, key=vals.get), min(vals, key=vals.get)):
+        # One decimal: 42.5 rounds to 42 half-to-even and to 43 half-up, and a
+        # label that disagrees with the prose by a point invites the wrong question.
+        ax.annotate(f"{PLANG_NAME[pl]} {vals[pl]:.1f}%", (vals[pl], len(smells) - 1),
+                    textcoords="offset points", xytext=(0, 9), ha="center",
+                    fontsize=8.5, color=INK, fontweight="bold")
+    style(ax)
+    ax.xaxis.grid(True, color=GRID, lw=0.8)
+    ax.yaxis.grid(False)
+    ax.set_yticks(range(len(smells)))
+    ax.set_yticklabels([SHORT.get(s, s) for s in smells], fontsize=9.5, color=INK)
+    ax.set_xlim(-2, 102)
+    ax.set_xticks([0, 25, 50, 75, 100])
+    ax.set_xticklabels(["0%", "25%", "50%", "75%", "100%"])
+    ax.set_xlabel("working files containing the requested smell", fontsize=9.5,
+                  color=INK)
+    handles = [plt.Line2D([], [], marker="o", ls="", color=PLANG_COLOUR[k],
+                          markersize=7, label=PLANG_NAME[k]) for k in PLANG_COLOUR]
+    ax.legend(handles=handles, frameon=False, fontsize=9, ncol=4,
+              loc="lower left", bbox_to_anchor=(0, 1.0))
+    fig.tight_layout(rect=(0, 0, 0.93, 1))
+    fig.savefig(out, dpi=200, facecolor=SURFACE)
+    plt.close(fig)
+    print(f"  wrote {out.name}")
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--analysis", default="_analysis")
+    ap.add_argument("--analysis", default="_analysis_fullsize")
+    ap.add_argument("--xlang", default="_analysis_xlang")
     args = ap.parse_args()
     a = Path(args.analysis)
     figdir = a / "figures"
@@ -220,6 +286,9 @@ def main():
     fig1(read(a / "by_lang_matched.csv"), figdir / "fig1_validity_confound.png")
     fig2(read(a / "by_smell.csv"), figdir / "fig2_induction_by_smell.png")
     fig3(read(a / "by_model_lang.csv"), figdir / "fig3_validity_by_model.png")
+    x = Path(args.xlang)
+    if (x / "by_plang_smell.csv").exists():
+        fig4(read(x / "by_plang_smell.csv"), figdir / "fig4_smell_gap_by_language.png")
 
 
 if __name__ == "__main__":
