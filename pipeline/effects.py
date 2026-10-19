@@ -18,6 +18,10 @@ Three families, one per experiment:
                          programming language (5 models); and the interaction,
                          how far that language effect differs from Python's
 
+The prompt-language contrasts are repeated on prompts whose target smell has a
+detector with a lift of at least 20 (by_smell.csv), so a weak detector cannot be
+what carries the effect.
+
 Every contrast is computed on the (model, prompt) pairs present in all the cells
 it compares, so a difference can never be a difference in which prompts were asked.
 Beside each estimate is how many of the models show a change in the same direction,
@@ -110,15 +114,23 @@ def contrast(cells, combine, label_rows):
     return out
 
 
-def prompt_language(rows):
+def prompt_language(rows, strong=None):
     rows = [r for r in rows if r["model"] not in EXCLUDED]
+    label = "python"
+    if strong is not None:
+        rows = [r for r in rows if r["target_smells"]
+                and all(t in strong for t in r["target_smells"].split(";"))]
+        label = "python, strong detectors"
     out = []
     for lang in LANGS[1:]:
         cells = Cells(rows, ["en", lang], lambda r: r["lang"])
         out += contrast(cells, lambda r: r[1] - r[0],
-                        {"experiment": "prompt language", "within": "python",
+                        {"experiment": "prompt language", "within": label,
                          "contrast": f"{lang} - en"})
     return out
+
+
+STRONG_LIFT = 20
 
 
 def programming_language(rows):
@@ -175,7 +187,7 @@ def write(path, rows):
 
 def show(rows):
     for r in rows:
-        print(f"  {r['experiment']:21s} {r['within']:15s} {r['contrast']:22s} {r['metric']:9s} "
+        print(f"  {r['experiment']:21s} {r['within']:24s} {r['contrast']:22s} {r['metric']:9s} "
               f"{r['estimate']:+7.1f}  [{r['ci_lo']:+6.1f}, {r['ci_hi']:+6.1f}]  "
               f"{r['models_same_direction']}/{r['n_models']} models")
 
@@ -186,7 +198,10 @@ def main():
     ap.add_argument("--xlang", default="_analysis_xlang")
     args = ap.parse_args()
 
-    e1 = prompt_language(read(Path(args.analysis) / "per_file.csv"))
+    per_file = read(Path(args.analysis) / "per_file.csv")
+    strong = {r["target_smell"] for r in read(Path(args.analysis) / "by_smell.csv")
+              if r["lift"] not in ("", None) and float(r["lift"]) >= STRONG_LIFT}
+    e1 = prompt_language(per_file) + prompt_language(per_file, strong)
     write(Path(args.analysis) / "effects.csv", e1)
     x = read(Path(args.xlang) / "per_file.csv")
     e23 = programming_language(x) + both(x)
