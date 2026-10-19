@@ -95,6 +95,18 @@ def plain_list(items):
     return ", ".join(items[:-1]) + " and " + items[-1]
 
 
+def mixed(*paths):
+    """{(experiment, term): (odds ratio, lo, hi)} from pipeline/mixed_model.py."""
+    out = {}
+    for p in paths:
+        if p.exists():
+            for r in read(p):
+                if r["odds_ratio"] not in ("", None):
+                    out[(r["experiment"], r["term"])] = (float(r["odds_ratio"]),
+                                                         float(r["or_lo"]), float(r["or_hi"]))
+    return out
+
+
 class Effects:
     """The contrasts from pipeline/effects.py, keyed as they are written."""
 
@@ -226,6 +238,7 @@ def build(analysis: Path, xlang: Path, docs: Path):
     e1 = experiment1(analysis)
     e2 = experiment2(xlang, root)
     eff = Effects(analysis / "effects.csv", xlang / "effects.csv")
+    mm = mixed(analysis / "mixed_model.csv", xlang / "mixed_model.csv")
     m1, m2 = e1["matched"], e2["matched"]
     has_grid = any(pl != "python" and l != "en" for pl, l in e2["grid"])
 
@@ -245,6 +258,14 @@ def build(analysis: Path, xlang: Path, docs: Path):
 
     # --------------------------------------------- experiment 1: prompt language
     d1 = {l: eff.get("prompt language", "python", f"{l} - en") for l in ORDER[1:]}
+    d1s = {l: eff.get("prompt language", "python, strong detectors", f"{l} - en")
+           for l in ORDER[1:]}
+    strong_txt = ""
+    if all(d1s.values()):
+        strong_txt = ("<p>Restricted to the smells whose detectors discriminate well (a "
+                      f"lift of at least {WEAK_LIFT}, below), the changes are "
+                      + plain_list(f"{signed(d1s[l]['est'])} in {LANG[l]}" for l in ORDER[1:])
+                      + ", so the weak detectors are not what carries the effect.</p>")
     v1 = {l: eff.get("prompt language", "python", f"{l} - en", "validity") for l in ORDER[1:]}
     all_down = all(d and d["est"] < 0 and clear(d) for d in d1.values())
     every_model = all(d and d["same"] == d["n"] for d in d1.values())
@@ -388,12 +409,16 @@ def build(analysis: Path, xlang: Path, docs: Path):
             f"for, smell production falls "
             f"{abs(num(r, 'drop_lost_some')):.0f} points; where every name survived, "
             f"{abs(num(r, 'drop_kept_all')):.0f}.")
+    d2v = [d for d in d2.values() if d]
+    lean = (len({d["est"] > 0 for d in d2v}) == 1
+            and all(d["same"] == d["n"] for d in d2v))
     findings.append(
-        f"<strong>The programming language does not change smell production on "
-        f"average.</strong> Java, C++ and C are within "
-        f"{max(abs(d['est']) for d in d2.values() if d):.0f} points of Python"
-        + (", and no difference is distinguishable from zero" if not x_clear else "")
-        + f". Smell by smell they differ by up to {top_vals[hi_l] - top_vals[lo_l]:.0f} "
+        f"<strong>The programming language matters smell by smell, not on "
+        f"average.</strong> Overall, Java, C++ and C are within "
+        f"{max(abs(d['est']) for d in d2v):.0f} points of Python"
+        + ((" (" + plain_list(f"{PLANG[p]} {signed(d2[p]['est'])}" for p in PORDER[1:] if d2.get(p))
+            + (", every model leaning the same way" if lean else "") + ")") if d2v else "")
+        + f"; smell by smell they differ by up to {top_vals[hi_l] - top_vals[lo_l]:.0f} "
         f"points, following each language's habits.")
     if has_grid and found3:
         findings.append(
@@ -450,6 +475,26 @@ def build(analysis: Path, xlang: Path, docs: Path):
         moved_txt = (f"in {len(moved)} model-and-language cells, belonging to "
                      + plain_list(f"<code>{m}</code>" for m in sorted({r['model'] for r in moved}))
                      + " (<code>extraction_check.csv</code> lists them)")
+
+    # The mixed model as a check: same direction everywhere? where more confident?
+    mm_txt = ""
+    if mm:
+        e1_or = [(l, mm.get(("prompt language", f"C(lang, Treatment('en'))[T.{l}]")))
+                 for l in ORDER[1:]]
+        e2_or = [(p, mm.get(("programming language", f"C(plang, Treatment('python'))[T.{p}]")))
+                 for p in PORDER[1:]]
+        agree = all(o and d1[l] and (o[0] < 1) == (d1[l]["est"] < 0) for l, o in e1_or) and \
+            all(o and d2[p] and (o[0] < 1) == (d2[p]["est"] < 0) for p, o in e2_or)
+        above = [PLANG[p] for p, o in e2_or if o and o[1] > 1 and not clear(d2[p])]
+        mm_txt = (
+            "As a check, a logistic mixed-effects model with crossed random intercepts "
+            "for prompt and model (<code>mixed_model.csv</code>) "
+            + ("agrees on the direction of every effect" if agree
+               else "disagrees on the direction of at least one effect")
+            + "; its odds ratios against English are "
+            + plain_list(f"{o[0]:.2f} in {LANG[l]}" for l, o in e1_or if o) + "."
+            + (f" It is more confident than the resampling about the programming "
+               f"language, putting {plain_list(above)} above Python." if above else ""))
 
     controls = table(["Control", "What it does", "Why"], [
         ["Validity", "Smell and quality figures use parsing files only",
@@ -515,6 +560,7 @@ def build(analysis: Path, xlang: Path, docs: Path):
   change from English is measured on the same prompts and models, with a 95% interval;
   the last column counts the models whose own rate falls.</p>
   {lang_table}
+  {strong_txt}
   <p>Code quality does not depend on the prompt language: on files that parse,
   {min(lint_valid):.1f} to {max(lint_valid):.1f} lint violations per 100 lines in all
   four. Files that fail to parse average {e1['density']['0']:.0f} per 100 lines, which is
@@ -589,7 +635,7 @@ def build(analysis: Path, xlang: Path, docs: Path):
     single definition; Python is re-scored with it so the columns share an
     instrument.</li>
     <li><strong>Uncertainty.</strong> Each difference is recomputed in 1,000 resamples
-    of whole prompts, because one prompt's files rise and fall together.</li>
+    of whole prompts, because one prompt's files rise and fall together. {mm_txt}</li>
     <li><strong>Excluded.</strong> <code>mamba-codestral-7b</code> substitutes a wrong
     token about once in every 140 and only 6 of 20 files parse. Five causes were tested:
     two were pipeline faults and were fixed, three were ruled out, leaving the published

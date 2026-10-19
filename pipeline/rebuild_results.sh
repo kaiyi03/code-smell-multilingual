@@ -42,6 +42,7 @@ echo "== checks and contrasts"
 $PY -m pipeline.extraction_check --original "$ORIG/fullsize" --current _analysis_fullsize --scored "$SCORED"
 $PY -m pipeline.extraction_check --original "$ORIG/xlang" --current _analysis_xlang --scored "$SCORED"
 $PY -m pipeline.effects
+$PY -m pipeline.mixed_model
 $PY -m pipeline.translation_check
 
 echo "== figures and page"

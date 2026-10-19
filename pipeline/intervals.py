@@ -7,8 +7,9 @@ language, so a hard prompt drags down a whole row of files at once. Resampling
 files would treat those as separate evidence and give intervals far too narrow.
 Resampling prompts keeps each prompt's files together, which is the honest unit.
 
-This is a summary, not the final analysis: a mixed-effects model with model and
-prompt as random effects is the proper treatment, and is listed as next work.
+These are intervals around single rates. A difference between two rates needs
+pipeline/effects.py, which keeps the pairing; pipeline/mixed_model.py fits the
+logistic mixed-effects model with prompt and model as random effects.
 """
 
 import random
