@@ -28,6 +28,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 STEPS = ("first_block", "whole", "fence_free", "unparsed")
+EXCLUDED = {"mamba-codestral-7b"}
 
 
 def read(path):
@@ -83,6 +84,23 @@ def main():
                     "induction_original": i0, "induction": i1,
                     **{f"{s}_pct": round(100.0 * st[s] / n, 2) for s in STEPS}})
 
+    # One row per programming and prompt language across all models: the level
+    # the results are reported at, so the shift the page quotes is the one that
+    # matters rather than the largest single cell.
+    for plang, lang in sorted({(k[0], k[2]) for k in groups["current"]}):
+        keys = [k for k in groups["current"]
+                if k[0] == plang and k[2] == lang and k[1] not in EXCLUDED]
+        cur = [r for k in keys for r in groups["current"][k]]
+        orig = [r for k in keys for r in groups["original"].get(k, [])]
+        st = sum((steps(args.scored, *k) for k in keys), Counter())
+        n = sum(st.values()) or len(cur)
+        v0, i0 = rates(orig)
+        v1, i1 = rates(cur)
+        out.append({"plang": plang, "model": "all", "lang": lang, "n": len(cur),
+                    "valid_original": v0, "valid": v1,
+                    "induction_original": i0, "induction": i1,
+                    **{f"{s}_pct": round(100.0 * st[s] / n, 2) for s in STEPS}})
+
     path = Path(args.current) / "extraction_check.csv"
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(out[0]))
@@ -90,7 +108,10 @@ def main():
         w.writerows(out)
     print(f"wrote {path} ({len(out)} cells)")
     for r in out:
-        if (isinstance(r["valid_original"], float) and abs(r["valid"] - r["valid_original"]) >= 5):
+        if r["model"] == "all" and isinstance(r["induction_original"], float):
+            print(f"  {r['plang']:6s} {'all models':22s} {r['lang']}  valid {r['valid_original']:5.1f}% -> "
+                  f"{r['valid']:5.1f}%   induction {r['induction_original']:5.1f}% -> {r['induction']:5.1f}%")
+        elif (isinstance(r["valid_original"], float) and abs(r["valid"] - r["valid_original"]) >= 5):
             print(f"  {r['plang']:6s} {r['model']:22s} {r['lang']}  valid {r['valid_original']:5.1f}% -> "
                   f"{r['valid']:5.1f}%   ({100 - r['first_block_pct']:.0f}% of replies unfenced)")
 

@@ -6,11 +6,12 @@ Generated rather than hand-written so the page cannot drift from the data: every
 number on it is read from _analysis_fullsize/ and _analysis_xlang/ at build time.
 Four earlier passages went stale because a count was typed into the prose by hand
 (six smells after the detector reached twelve, nine models after thirteen, a model
-described as collapsing in Chinese after the data said 96%). Prose here states a
-number only by computing it.
+described as collapsing in Chinese after the data said 96%). A fifth called one
+language effect "the one that survives" after comparing intervals around each
+rate, which cannot settle a difference. Prose here states a number only by
+computing it, and a difference only from pipeline/effects.py.
 
     python -m pipeline.make_figures
-    python -m pipeline.extraction_check --root ../outputs_arc
     python -m pipeline.make_site
 
 Serve it by setting GitHub Pages to the main branch, /docs folder.
@@ -26,7 +27,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from detector.cross_language import APPLICABLE, OUT_OF_REACH
-from pipeline import intervals
 
 REPO = "https://github.com/kaiyi03/code-smell-multilingual"
 LANG = {"en": "English", "es": "Spanish", "fr": "French", "zh": "Chinese"}
@@ -38,6 +38,7 @@ SHORT = {"Comments (as smell indicator)": "Comments",
          "God Class / Large Class": "God Class",
          "Magic Numbers/Strings": "Magic Numbers"}
 WEAK_LIFT = 20
+MINUS = "−"
 
 # Why a smell sits closer to one language's habits than another's. Keyed by smell,
 # and shown only for whichever smells the data puts at the top of the gap ranking,
@@ -70,9 +71,10 @@ def pct(v, nd=1):
     return "—" if v is None else f"{v:.{nd}f}%"
 
 
-def ci(pair):
-    lo, hi = pair
-    return "" if lo is None else f'<span class="ci">{lo:.0f}–{hi:.0f}</span>'
+def signed(v, nd=1):
+    """+5.5 or −5.5, with a true minus sign."""
+    s = f"{v:+.{nd}f}"
+    return s.replace("-", MINUS)
 
 
 def table(headers, rows, cls=""):
@@ -86,65 +88,73 @@ def rate(rows, key):
     return 100.0 * sum(int(r[key]) for r in rows) / len(rows) if rows else None
 
 
+def plain_list(items):
+    items = list(items)
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + " and " + items[-1]
+
+
+class Effects:
+    """The contrasts from pipeline/effects.py, keyed as they are written."""
+
+    def __init__(self, *paths):
+        self.rows = {}
+        for p in paths:
+            if p.exists():
+                for r in read(p):
+                    self.rows[(r["experiment"], r["within"], r["contrast"], r["metric"])] = r
+
+    def get(self, experiment, within, contrast, metric="induction"):
+        r = self.rows.get((experiment, within, contrast, metric))
+        if r is None:
+            return None
+        return {"est": num(r, "estimate"), "lo": num(r, "ci_lo"), "hi": num(r, "ci_hi"),
+                "same": int(r["models_same_direction"]), "n": int(r["n_models"])}
+
+
+def clear(d):
+    """Does the interval exclude zero?"""
+    return d is not None and (d["lo"] > 0 or d["hi"] < 0)
+
+
+def cell(d, nd=1):
+    """An estimate with its interval, for a table."""
+    if d is None:
+        return "—"
+    return (f'{signed(d["est"], nd)} <span class="ci">{signed(d["lo"], nd)} to '
+            f'{signed(d["hi"], nd)}</span>')
+
+
 # --------------------------------------------------------------------- data
 
 def experiment1(analysis):
     matched = {r["lang"]: r for r in read(analysis / "by_lang_matched.csv")}
     per_file = [r for r in read(analysis / "per_file.csv") if r["model"] not in EXCLUDED]
-    by_ml = read(analysis / "by_model_lang.csv")
-    models = sorted({r["model"] for r in by_ml})
+    models = sorted({r["model"] for r in per_file})
 
-    # Pooled lint density by whether the file parses: the same definition the
-    # tables use (violations over lines), not a mean of per-file rates, which a
-    # handful of three-line files would dominate.
+    # Pooled lint density by whether the file parses: violations over lines, not a
+    # mean of per-file rates, which a handful of three-line files would dominate.
     density = {}
     for ok in ("1", "0"):
         g = [r for r in per_file if r["syntax_ok"] == ok]
         lines = sum(int(r["loc"]) for r in g)
         density[ok] = 100.0 * sum(int(r["ruff_total"]) for r in g) / lines if lines else None
 
-    extraction = []
-    n_fencers = 0
-    ex_path = analysis / "extraction_check.csv"
-    if ex_path.exists():
-        # Models that wrap at least 95% of their English replies in a fence, despite
-        # a system prompt that asks for no Markdown.
-        n_fencers = sum(1 for r in read(ex_path)
-                        if r["lang"] == "en" and num(r, "unfenced_pct") <= 5)
-        for r in read(ex_path):
-            gain = num(r, "valid_fence_free_pct") - num(r, "valid_scored_pct")
-            if gain >= 5:
-                extraction.append(r)
-    affected = {r["model"] for r in extraction}
-
-    valid = defaultdict(dict)
-    for r in by_ml:
-        valid[r["model"]][r["lang"]] = num(r, "syntax_ok_pct")
-    others = [m for m in models if m not in affected]
-    worst_other = max((valid[m]["en"] - valid[m][l] for m in others for l in ORDER[1:]),
-                      default=0)
-
-    return {"matched": matched, "ci": intervals.by_group(per_file, "lang", ORDER),
-            "density": density, "extraction": extraction, "affected": affected,
+    return {"matched": matched, "density": density, "models": models,
             "n_models": len(models), "n_files": len(per_file),
-            "worst_other": worst_other, "n_fencers": n_fencers,
-            "by_smell": read(analysis / "by_smell.csv")}
+            "by_smell": read(analysis / "by_smell.csv"),
+            "extraction": read(analysis / "extraction_check.csv")
+            if (analysis / "extraction_check.csv").exists() else []}
 
 
 def experiment2(xlang, root):
+    per_file = [r for r in read(xlang / "per_file.csv") if r["model"] not in EXCLUDED]
+    five = sorted({r["model"] for r in per_file if r["plang"] != "python"})
+    rows = [r for r in per_file if r["lang"] == "en" and r["model"] in five]
     matched = {r["plang"]: r for r in read(xlang / "by_plang_matched.csv")}
-    rows = [r for r in read(xlang / "per_file.csv")
-            if r["lang"] == "en" and r["model"] not in EXCLUDED]
-    five = sorted({r["model"] for r in rows if r["plang"] != "python"})
-    rows = [r for r in rows if r["model"] in five]
 
-    seen = defaultdict(set)
-    for r in rows:
-        seen[(r["model"], r["prompt_id"])].add(r["plang"])
-    keep = {k for k, v in seen.items() if len(v) == len(PORDER)}
-    m_rows = [r for r in rows if (r["model"], r["prompt_id"]) in keep]
-
-    # Per model and language: validity, and how often the answer ran into the cap.
+    # Per model and language: validity, the output cap, and headerless includes.
     per_model = defaultdict(dict)
     for mdl in five:
         for pl in PORDER:
@@ -152,11 +162,12 @@ def experiment2(xlang, root):
             if not g:
                 continue
             capped = [r for r in g if r.get("hit_limit") not in ("", None)]
-            broken = [r for r in capped if r["syntax_ok"] == "0"]
             per_model[mdl][pl] = {
                 "valid": rate(g, "syntax_ok"),
                 "limit": rate(capped, "hit_limit") if capped else None,
-                "broken_limit": rate(broken, "hit_limit") if broken else None}
+                "bare": 100.0 * sum(int(r.get("bare_includes") or 0) > 0 for r in g) / len(g),
+                "looping": 100.0 * sum(int(r.get("bare_includes") or 0) >= 50
+                                       and r.get("hit_limit") == "1" for r in g) / len(g)}
 
     # The model whose C and C++ validity falls furthest below its own Python.
     def drop(m):
@@ -169,6 +180,8 @@ def experiment2(xlang, root):
     rest = [m for m in five if m != worst]
     rest_range = (min(per_model[m][p]["valid"] for m in rest for p in per_model[m]),
                   max(per_model[m][p]["valid"] for m in rest for p in per_model[m]))
+    others_bare = max(per_model[m][p]["bare"] for m in rest for p in ("cpp", "c")
+                      if p in per_model[m])
 
     by_smell = read(xlang / "by_plang_smell.csv")
     gaps = defaultdict(dict)
@@ -189,14 +202,21 @@ def experiment2(xlang, root):
     smells_c = {t for p in prompts_c for t in p["code_smells"]}
     overrides = json.loads((root / "dataset" / "prompt_overrides.json").read_text(encoding="utf-8"))
 
-    return {"matched": matched, "ci": intervals.by_group(m_rows, "plang", PORDER),
-            "five": five, "per_model": per_model, "worst": worst, "runaway": runaway,
-            "rest_range": rest_range, "gaps": gaps, "ranked": ranked,
+    grid = read(xlang / "by_plang_lang.csv") if (xlang / "by_plang_lang.csv").exists() else []
+    return {"matched": matched, "five": five, "per_model": per_model, "worst": worst,
+            "runaway": runaway, "rest_range": rest_range, "others_bare": others_bare,
+            "gaps": gaps, "ranked": ranked,
             "n_dot": (min(n_dot), max(n_dot)) if n_dot else (0, 0),
-            "n_new": sum(1 for r in rows if r["plang"] != "python"),
+            "n_new": sum(1 for r in per_file if r["plang"] != "python"),
+            "n_new_langs": len({r["lang"] for r in per_file if r["plang"] != "python"}),
             "n_c": len(prompts_c), "n_all": len(prompts_py),
             "n_class_smells": len(smells_py - smells_c),
-            "n_hand": sum(1 for k in overrides if not k.startswith("_"))}
+            "n_hand": sum(1 for k in overrides if not k.startswith("_")),
+            "grid": {(r["plang"], r["lang"]): r for r in grid},
+            "translation": read(xlang / "translation_check.csv")
+            if (xlang / "translation_check.csv").exists() else [],
+            "extraction": read(xlang / "extraction_check.csv")
+            if (xlang / "extraction_check.csv").exists() else []}
 
 
 # ---------------------------------------------------------------------- page
@@ -205,95 +225,104 @@ def build(analysis: Path, xlang: Path, docs: Path):
     root = Path(__file__).resolve().parent.parent
     e1 = experiment1(analysis)
     e2 = experiment2(xlang, root)
+    eff = Effects(analysis / "effects.csv", xlang / "effects.csv")
     m1, m2 = e1["matched"], e2["matched"]
+    has_grid = any(pl != "python" and l != "en" for pl, l in e2["grid"])
 
-    # Only the figure the page shows is published; the others stay with the
+    # Only the figures the page shows are published; the others stay with the
     # analysis, where they are regenerated, rather than lingering as orphans.
     figs = docs / "figures"
     figs.mkdir(parents=True, exist_ok=True)
     for old in figs.glob("*.png"):
         old.unlink()
-    fig4 = analysis / "figures" / "fig4_smell_gap_by_language.png"
-    if fig4.exists():
-        shutil.copy2(fig4, figs / fig4.name)
+    shown = ["fig4_smell_gap_by_language.png"] + (["fig5_language_effect_by_plang.png"]
+                                                  if has_grid else [])
+    for name in shown:
+        f = analysis / "figures" / name
+        if f.exists():
+            shutil.copy2(f, figs / name)
     (docs / ".nojekyll").write_text("", encoding="utf-8")
 
-    # ------------------------------------------------------------- summary
-    en_ind, zh_ind = num(m1["en"], "induction_valid"), num(m1["zh"], "induction_valid")
+    # --------------------------------------------- experiment 1: prompt language
+    d1 = {l: eff.get("prompt language", "python", f"{l} - en") for l in ORDER[1:]}
+    v1 = {l: eff.get("prompt language", "python", f"{l} - en", "validity") for l in ORDER[1:]}
+    all_down = all(d and d["est"] < 0 and clear(d) for d in d1.values())
+    every_model = all(d and d["same"] == d["n"] for d in d1.values())
+    vmax = max(abs(v["est"]) for v in v1.values() if v)
     lint_valid = [num(m1[l], "ruff_per_100loc_valid") for l in ORDER]
-    x_ind = [num(m2[p], "induction_valid") for p in PORDER if p in m2]
-    top = e2["ranked"][0]
-    top_vals = e2["gaps"][top]
-    hi_l, lo_l = max(top_vals, key=top_vals.get), min(top_vals, key=top_vals.get)
-    def gain(r):
-        return num(r, "valid_fence_free_pct") - num(r, "valid_scored_pct")
-    es_row = max((r for r in e1["extraction"] if r["lang"] == "es"), key=gain, default=None)
-    # The family name, read off the affected models rather than typed, so the prose
-    # cannot name a family the data no longer implicates.
-    fams = {m.split("-")[0] for m in e1["affected"]}
-    family = fams.pop().title() if len(fams) == 1 else "two models"
-    worst = e2["worst"]
-    wv = e2["per_model"][worst]
 
-    findings = [
-        f"<strong>Smell production falls from {en_ind:.0f}% in English to {zh_ind:.0f}% in "
-        f"Chinese</strong>, the one prompt-language effect that survives every control.",
-        f"<strong>Both apparent validity effects belong to one model family.</strong> "
-        f"Spanish trails English ({pct(num(m1['es'], 'syntax_ok_pct'))} valid against "
-        f"{pct(num(m1['en'], 'syntax_ok_pct'))}) because {family} leaves out the code fence "
-        + (f"in Spanish: accepting unfenced code takes <code>{es_row['model']}</code> from "
-           f"{num(es_row, 'valid_scored_pct'):.0f}% to {num(es_row, 'valid_fence_free_pct'):.0f}%. "
-           if es_row else ". ")
-        + f"C and C++ trail because <code>{worst}</code> runs past the output limit.",
-        f"<strong>Code quality does not depend on the prompt language</strong> once broken "
-        f"files are set aside: {min(lint_valid):.1f} to {max(lint_valid):.1f} lint violations "
-        f"per 100 lines on parsing files in all four.",
-        f"<strong>The requested smell appears at the same rate in every programming "
-        f"language</strong> ({min(x_ind):.0f} to {max(x_ind):.0f}% of working files), but smell "
-        f"by smell the languages differ by up to {top_vals[hi_l] - top_vals[lo_l]:.0f} points, "
-        f"following each language's habits.",
-    ]
-
-    # ------------------------------------------------------- experiment 1
     rows1 = []
     for l in ORDER:
         r = m1[l]
-        (v_ci, i_ci) = e1["ci"][l]
-        rows1.append([LANG[l], f'{pct(num(r, "syntax_ok_pct"))} {ci(v_ci)}',
-                      f'{pct(num(r, "induction_valid"))} {ci(i_ci)}',
-                      f'{num(r, "ruff_per_100loc_all"):.1f}',
-                      f'<strong>{num(r, "ruff_per_100loc_valid"):.1f}</strong>'])
+        d = d1.get(l)
+        rows1.append([LANG[l], pct(num(r, "syntax_ok_pct")), pct(num(r, "induction_valid")),
+                      "—" if l == "en" else cell(d),
+                      "—" if l == "en" or d is None else f'{d["same"]} of {d["n"]}'])
     lang_table = table(["Prompt language", "Valid code", "Smell produced",
-                        "Lint per 100 lines, all files", "Parsing files only"], rows1)
+                        "Change from English",
+                        "Models that drop" if all(d and d["est"] < 0 for d in d1.values())
+                        else "Models moving the same way"], rows1)
 
-    ex_rows = [[r["model"], LANG[r["lang"]], pct(num(r, "valid_scored_pct")),
-                f'<strong>{pct(num(r, "valid_fence_free_pct"))}</strong>',
-                pct(num(r, "unfenced_pct"), 0)]
-               for r in sorted(e1["extraction"], key=lambda x: (x["model"], x["lang"]))]
-    ex_table = table(["Model", "Prompt language", "Valid as scored",
-                      "Valid without requiring a fence", "Replies with no fence"], ex_rows)
-    n_aff = len(e1["affected"])
+    # How much of the drop travels with translation damage.
+    tr = {r["lang"]: r for r in e2["translation"] if r["scores"].startswith("prompt language")}
+    tr_rows, tr_clear = [], []
+    for l in ORDER[1:]:
+        r = tr.get(l)
+        if not r:
+            continue
+        d = {"est": num(r, "difference"), "lo": num(r, "ci_lo"), "hi": num(r, "ci_hi")}
+        if clear(d):
+            tr_clear.append((l, r))
+        tr_rows.append([LANG[l], f'{num(r, "identifiers_retained_pct"):.0f}%',
+                        signed(num(r, "drop_kept_all")), signed(num(r, "drop_lost_some")),
+                        cell(d)])
+    tr_table = table(["Prompt language", "Names kept by the translator",
+                      "Change where every name was kept", "Change where a name was lost",
+                      "Difference"], tr_rows) if tr_rows else ""
+    if tr_clear:
+        tr_txt = " ".join(
+            f"In {LANG[l]}, prompts where the translator changed a name lose "
+            f"{abs(num(r, 'drop_lost_some')):.0f} points against "
+            f"{abs(num(r, 'drop_kept_all')):.0f} where every name survived, so part of "
+            f"the {LANG[l]} drop travels with damage to the prompt rather than with the "
+            f"language alone."
+            for l, r in tr_clear)
+        rest = [LANG[l] for l in tr if l not in dict(tr_clear)]
+        if rest:
+            tr_txt += f" In {plain_list(rest)} it makes no clear difference."
+        tr_txt += (" The drop is there even on prompts that kept every name, so it is "
+                   "not only translation damage.")
+    else:
+        tr_txt = ("Losing a name in translation makes no clear difference to the drop "
+                  "in any language.")
 
-    # ------------------------------------------------------- experiment 2
+    # -------------------------------------- experiment 2: programming language
+    d2 = {p: eff.get("programming language", "en", f"{p} - python") for p in PORDER[1:]}
     rows2 = []
     for p in PORDER:
         if p not in m2:
             continue
         r = m2[p]
-        (v_ci, i_ci) = e2["ci"][p]
-        rows2.append([PLANG[p], f'{pct(num(r, "syntax_ok_pct"))} {ci(v_ci)}',
-                      f'{pct(num(r, "induction_valid"))} {ci(i_ci)}',
+        rows2.append([PLANG[p], pct(num(r, "syntax_ok_pct")), pct(num(r, "induction_valid")),
+                      "—" if p == "python" else cell(d2.get(p)),
                       f'{num(r, "loc_mean"):.0f} lines'])
     plang_table = table(["Programming language", "Valid code", "Smell produced",
-                         "Mean length"], rows2)
+                         "Change from Python", "Mean length"], rows2)
+    x_clear = [p for p, d in d2.items() if clear(d)]
+    worst = e2["worst"]
+    wv = e2["per_model"][worst]
     runaway = e2["runaway"]
     runaway_txt = ""
     if runaway:
         rv = e2["per_model"][runaway[0]]
         vals = [rv[p]["valid"] for p in rv]
-        runaway_txt = (f" Separately, <code>{runaway[0]}</code> never stops by itself and reaches the cap "
-                       f"on every answer in every language, but its code comes first, so it "
-                       f"still parses {min(vals):.0f} to {max(vals):.0f}% of the time.")
+        runaway_txt = (f" Separately, <code>{runaway[0]}</code> never stops by itself and "
+                       f"reaches the output limit on every answer in every language, but its "
+                       f"answer comes first, so {min(vals):.0f} to {max(vals):.0f}% of its "
+                       f"files still parse.")
+    top = e2["ranked"][0]
+    top_vals = e2["gaps"][top]
+    hi_l, lo_l = max(top_vals, key=top_vals.get), min(top_vals, key=top_vals.get)
     habit_items = "".join(
         f"<li><strong>{SHORT.get(s, s)}</strong> "
         f"({PLANG[max(e2['gaps'][s], key=e2['gaps'][s].get)]} "
@@ -302,9 +331,88 @@ def build(analysis: Path, xlang: Path, docs: Path):
         f"{min(e2['gaps'][s].values()):.1f}%). {HABIT[s]}</li>"
         for s in e2["ranked"][:3] if s in HABIT)
 
-    # ------------------------------------------------------------- smells
-    weak = []
-    srows = []
+    # ------------------------------------------ experiment 3: both at once
+    d3 = {(p, l): eff.get("both", p, f"{l} - en") for p in PORDER for l in ORDER[1:]}
+    inter = {(p, l): eff.get("both", f"{p} vs python", f"({l} - en) difference")
+             for p in PORDER[1:] for l in ORDER[1:]}
+    inter = {k: v for k, v in inter.items() if v}
+    grid_rows = []
+    for p in PORDER:
+        if not any((p, l) in e2["grid"] for l in ORDER):
+            continue
+        grid_rows.append([PLANG[p]] + [
+            pct(num(e2["grid"][(p, l)], "induction_valid")) if (p, l) in e2["grid"] else "—"
+            for l in ORDER])
+    grid_table = table(["Smell produced"] + [LANG[l] for l in ORDER], grid_rows)
+    found3 = [d for d in d3.values() if d]
+    n_down = sum(1 for d in found3 if d["est"] < 0)
+    n_down_clear = sum(1 for d in found3 if d["est"] < 0 and clear(d))
+    inter_clear = [(k, v) for k, v in inter.items() if clear(v)]
+    if inter and not inter_clear:
+        lo = min(v["est"] for v in inter.values())
+        hi = max(v["est"] for v in inter.values())
+        inter_txt = (f"In no programming language is the effect distinguishable from "
+                     f"Python's: the {len(inter)} differences run from {signed(lo)} to "
+                     f"{signed(hi)} points, and every interval includes zero.")
+    elif inter_clear:
+        inter_txt = ("The effect differs from Python's in "
+                     f"{len(inter_clear)} of {len(inter)} combinations: "
+                     + plain_list(f"{PLANG[p]} in {LANG[l]} ({signed(v['est'])} points)"
+                                  for (p, l), v in sorted(inter_clear))
+                     + "; the rest are within noise of Python.")
+    else:
+        inter_txt = ""
+    # Validity in the grid: report any language that moves it beyond noise.
+    v3 = {(p, l): eff.get("both", p, f"{l} - en", "validity") for p in PORDER for l in ORDER[1:]}
+    v3_clear = [(k, v) for k, v in v3.items() if v and clear(v) and abs(v["est"]) >= 3]
+
+    # ---------------------------------------------------------------- summary
+    findings = []
+    if all_down:
+        findings.append(
+            f"<strong>Asking in another language lowers smell production.</strong> Against "
+            f"English, the requested smell appears "
+            + plain_list(f"{abs(d1[l]['est']):.1f} points less often in {LANG[l]}" for l in ORDER[1:])
+            + (f", in every one of the {e1['n_models']} models" if every_model else "")
+            + f". Whether the code is valid barely changes (at most {vmax:.1f} points).")
+    else:
+        findings.append(
+            "<strong>Prompt language and smell production.</strong> Against English: "
+            + plain_list(f"{LANG[l]} {signed(d1[l]['est'])} points" for l in ORDER[1:] if d1[l])
+            + ".")
+    if tr_clear:
+        l, r = tr_clear[0]
+        findings.append(
+            f"<strong>In {LANG[l]}, the drop is larger where translation damaged the "
+            f"prompt.</strong> Where machine translation changed a name the prompt asked "
+            f"for, smell production falls "
+            f"{abs(num(r, 'drop_lost_some')):.0f} points; where every name survived, "
+            f"{abs(num(r, 'drop_kept_all')):.0f}.")
+    findings.append(
+        f"<strong>The programming language does not change smell production on "
+        f"average.</strong> Java, C++ and C are within "
+        f"{max(abs(d['est']) for d in d2.values() if d):.0f} points of Python"
+        + (", and no difference is distinguishable from zero" if not x_clear else "")
+        + f". Smell by smell they differ by up to {top_vals[hi_l] - top_vals[lo_l]:.0f} "
+        f"points, following each language's habits.")
+    if has_grid and found3:
+        findings.append(
+            f"<strong>The prompt-language effect is the same in every programming "
+            f"language.</strong> " if inter and not inter_clear else
+            f"<strong>The prompt-language effect depends on the programming "
+            f"language.</strong> ")
+        findings[-1] += (f"Smell production falls in {n_down} of the {len(found3)} "
+                         f"combinations of prompt and programming language"
+                         + (f" ({n_down_clear} beyond noise)" if n_down_clear != n_down else "")
+                         + ". " + inter_txt)
+    findings.append(
+        f"<strong>C and C++ produce less valid code because of one model.</strong> "
+        f"<code>{worst}</code> writes <code>#include</code> lines that name no header in "
+        f"{wv['cpp']['bare']:.0f}% of its C++ and {wv['c']['bare']:.0f}% of its C answers; "
+        f"no other model does this in more than {e2['others_bare']:.0f}%.")
+
+    # ---------------------------------------------------------------- smells
+    weak, srows = [], []
     for r in sorted(e1["by_smell"], key=lambda x: -(num(x, "lift") or -999)):
         lift = num(r, "lift") or 0
         is_weak = lift < WEAK_LIFT
@@ -314,22 +422,69 @@ def build(analysis: Path, xlang: Path, docs: Path):
                       + (' <span class="flag">weak</span>' if is_weak else ""),
                       f'{int(num(r, "n_covered")):,}', pct(num(r, "induction_valid")),
                       pct(num(r, "base_rate")),
-                      f'<span class="{"flag" if is_weak else "good"}">{lift:+.0f}</span>'])
+                      f'<span class="{"flag" if is_weak else "good"}">{signed(lift, 0)}</span>'])
     smell_table = table(["Targeted smell", "Files", "Asked for", "Not asked for", "Lift"],
                         srows)
     n_cov = len(e1["by_smell"])
 
+    # ------------------------------------------------------------ extraction
+    # Python cells from the Python detector (Experiment 1), the rest from tree-sitter.
+    ex = ([r for r in e1["extraction"] if r["model"] not in EXCLUDED]
+          + [r for r in e2["extraction"] if r["model"] not in EXCLUDED and r["plang"] != "python"])
+    cells_ex = [r for r in ex if r["model"] != "all"]
+    totals_ex = [r for r in ex if r["model"] == "all"]
+    fencers = sum(1 for r in cells_ex if r["plang"] == "python" and r["lang"] == "en"
+                  and num(r, "first_block_pct") >= 95)
+    moved = [r for r in cells_ex if num(r, "valid_original") is not None
+             and abs(num(r, "valid") - num(r, "valid_original")) >= 5]
+    ind_shift = max((abs(num(r, "induction") - num(r, "induction_original")) for r in totals_ex
+                     if num(r, "induction") is not None and num(r, "induction_original") is not None),
+                    default=0)
+    if len(moved) <= 4:
+        moved_txt = "only for " + plain_list(
+            f"<code>{r['model']}</code> in {LANG[r['lang']]}"
+            + ("" if r["plang"] == "python" else f" {PLANG[r['plang']]}")
+            + f" ({num(r, 'valid_original'):.0f} to {num(r, 'valid'):.0f}%)"
+            for r in sorted(moved, key=lambda r: (r["model"], r["plang"], r["lang"])))
+    else:
+        moved_txt = (f"in {len(moved)} model-and-language cells, belonging to "
+                     + plain_list(f"<code>{m}</code>" for m in sorted({r['model'] for r in moved}))
+                     + " (<code>extraction_check.csv</code> lists them)")
+
     controls = table(["Control", "What it does", "Why"], [
-        ["Validity", "Quality and smell figures use parsing files only",
-         "A file that does not parse has no quality to measure"],
-        ["Matched prompts", "Languages are compared on prompts asked in all of them",
+        ["Validity", "Smell and quality figures use parsing files only",
+         "A file that does not parse has no smell to find"],
+        ["Matched prompts", "Every comparison uses prompts asked in all the cells it compares",
          f"C is asked {e2['n_c']} of the {e2['n_all']} prompts"],
+        ["Paired differences", "Each difference is recomputed inside every resample of prompts",
+         "The same prompts sit in both rates, so their errors move together"],
         ["Lift", "Each detector is also run on files that asked for another smell",
          f"A detector that fires everywhere reports a base rate; under {WEAK_LIFT} is weak"],
     ], cls="wrap-cells")
     oor = table(["Smell", "Why it is out of reach"],
                 [[SHORT.get(s, s), why] for s, why in sorted(OUT_OF_REACH.items())],
                 cls="wrap-cells")
+
+    exp3 = ""
+    if has_grid:
+        exp3 = f"""
+<section>
+  <h2>Experiment 3 · both languages at once</h2>
+  <p>The Java, C++ and C prompts translated into Spanish, French and Chinese the same
+  way as the Python ones, and asked of the same {len(e2['five'])} models, so every
+  prompt language meets every programming language.</p>
+  <figure>
+    <img src="figures/fig5_language_effect_by_plang.png" alt="Change in smell production against English for each prompt language, within each programming language, with 95% intervals">
+    <figcaption>Change in the share of working files containing the requested smell,
+    against English, on the same prompts and models. Lines are 95% intervals.</figcaption>
+  </figure>
+  <p>{inter_txt}</p>
+  {grid_table}
+  {('<p>Valid code moves beyond noise in ' + plain_list(
+      f"{PLANG[p]} in {LANG[l]} ({signed(v['est'])} points)" for (p, l), v in sorted(v3_clear))
+    + '.</p>') if v3_clear else
+   '<p>Whether the code is valid does not move by more than 3 points in any combination.</p>'}
+</section>"""
 
     html = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -342,8 +497,9 @@ def build(analysis: Path, xlang: Path, docs: Path):
   <p class="stand">Do open-weight code models produce the code smell they are asked for,
   and does that depend on the language of the prompt or the programming language
   requested?</p>
-  <p class="meta">{e1['n_models']} models, {e1['n_files']:,} files on prompt language ·
-  {len(e2['five'])} models, {e2['n_new']:,} new files on programming language ·
+  <p class="meta">{e1['n_models']} models, {e1['n_files']:,} Python files in four prompt
+  languages · {len(e2['five'])} models, {e2['n_new']:,} Java, C++ and C files in
+  {e2['n_new_langs']} prompt language{'s' if e2['n_new_langs'] != 1 else ''} ·
   <a href="{REPO}">source</a> · <a href="{REPO}/releases">data download</a></p>
 </header>
 
@@ -355,45 +511,39 @@ def build(analysis: Path, xlang: Path, docs: Path):
 <section>
   <h2>Experiment 1 · prompt language</h2>
   <p>The same {e2['n_all']} Python tasks asked in English, Spanish, French and Chinese,
-  of {e1['n_models']} models. Every model answered every prompt in every language.
-  Ranges are 95% intervals.</p>
+  of {e1['n_models']} models. Every model answered every prompt in every language. The
+  change from English is measured on the same prompts and models, with a 95% interval;
+  the last column counts the models whose own rate falls.</p>
   {lang_table}
-  <p class="callout">Files that fail to parse average
-  {e1['density']['0']:.0f} lint violations per 100 lines, against
-  {e1['density']['1']:.1f} for files that parse, so the all-files column mostly
-  measures how often generation broke. On parsing files the four languages are
-  level.</p>
-  <h3>Where the validity gap comes from</h3>
-  <p>The gap comes from {n_aff} model{'s' if n_aff != 1 else ''}; the other
-  {e1['n_models'] - n_aff} are within {e1['worst_other']:.0f} points of English in every
-  language. In Spanish, {family} writes the word <code>python</code> on its own line
-  instead of a fenced code block, and the extractor cannot separate the code from the
-  prose around it:</p>
-  {ex_table}
-  <p>The system prompt asks for code without Markdown formatting.
-  Of the {e1['n_models']} models, {e1['n_fencers']} ignore that and fence their code
-  anyway, which is what the extractor relies on; {family} in Spanish follows it but
-  adds explanation around the code. So the gap is the extractor's assumption rather
-  than a failure to follow the prompt. Scores here use the original extractor until
-  the full set is re-scored.</p>
+  <p>Code quality does not depend on the prompt language: on files that parse,
+  {min(lint_valid):.1f} to {max(lint_valid):.1f} lint violations per 100 lines in all
+  four. Files that fail to parse average {e1['density']['0']:.0f} per 100 lines, which is
+  why quality is only measured on parsing files.</p>
+  <h3>How much of the drop is translation</h3>
+  <p>The prompts were machine-translated, and the translator is not told which words
+  are code, so it sometimes translates a name the prompt asks for
+  (<code>place_order</code> becomes <code>lugar_orden</code>).</p>
+  {tr_table}
+  <p>{tr_txt}</p>
 </section>
 
 <section>
   <h2>Experiment 2 · programming language</h2>
   <p>The English prompts ported to Java, C++ and C, asked of {len(e2['five'])} models,
   one per family at 7B to 9B. C is asked {e2['n_c']} of the {e2['n_all']} prompts
-  because {e2['n_class_smells']} smells are defined over classes; the table compares
-  prompts asked in all four languages.</p>
+  because {e2['n_class_smells']} smells are defined over classes; each comparison uses
+  the prompts asked in both languages.</p>
   {plang_table}
-  <p class="callout">The C and C++ drop is one model. <code>{worst}</code> writes valid C++
-  {wv['cpp']['valid']:.0f}% and C {wv['c']['valid']:.0f}% of the time, against
-  {wv['python']['valid']:.0f}% in Python, and {wv['cpp']['broken_limit']:.0f}% of its broken
-  C++ and {wv['c']['broken_limit']:.0f}% of its broken C answers ran to the 2,048-token output
-  limit and were cut off mid-statement. The other four models
-  stay between {e2['rest_range'][0]:.1f} and {e2['rest_range'][1]:.1f}% in every
+  <p class="callout">The C and C++ validity gap is one model. <code>{worst}</code> writes
+  valid C++ {wv['cpp']['valid']:.0f}% and C {wv['c']['valid']:.0f}% of the time, against
+  {wv['python']['valid']:.0f}% in Python. Its C and C++ answers open with
+  <code>#include</code> lines that name no header, which no compiler accepts, and in
+  {wv['cpp']['looping']:.0f}% of C++ and {wv['c']['looping']:.0f}% of C answers it repeats
+  that line until the output limit. The other {len(e2['five']) - 1} models stay between
+  {e2['rest_range'][0]:.1f} and {e2['rest_range'][1]:.1f}% in every
   language.{runaway_txt}</p>
   <h3>Smells follow each language's habits</h3>
-  <p>The flat average hides large differences smell by smell, and the direction is
+  <p>The average hides large differences smell by smell, and the direction is
   consistent: a smell is easier to produce where it is the ordinary way to write that
   language.</p>
   <figure>
@@ -404,13 +554,13 @@ def build(analysis: Path, xlang: Path, docs: Path):
   </figure>
   <ul>{habit_items}</ul>
 </section>
-
+{exp3}
 <section>
   <h2>Which smells models produce on request</h2>
   <p>Experiment 1, Python, {n_cov} of 25 smells measured. Beside each rate is how often
   the same detector fires on files that asked for a different smell; the gap between
-  them, the lift, is what the prompt caused. {', '.join(weak[:-1]) + ' and ' + weak[-1] if len(weak) > 1 else ''.join(weak)} have a lift under
-  {WEAK_LIFT} and are reported, not relied on.</p>
+  them, the lift, is what the prompt caused. {plain_list(weak)} {'have' if len(weak) != 1 else 'has'}
+  a lift under {WEAK_LIFT} and {'are' if len(weak) != 1 else 'is'} reported, not relied on.</p>
   {smell_table}
 </section>
 
@@ -424,17 +574,26 @@ def build(analysis: Path, xlang: Path, docs: Path):
     <li><strong>Prompts.</strong> Spanish, French and Chinese by NLLB-200 machine
     translation, with system prompts translated by hand. Java, C++ and C ported rather
     than translated, since "write a Python function" has to become "write a Java
-    method"; {e2['n_hand']} prompts were rewritten by hand.</li>
+    method"; {e2['n_hand']} prompts were rewritten by hand. The ported prompts were then
+    translated exactly as the Python ones were.</li>
+    <li><strong>Extracting the code.</strong> The answer is the first fenced code block
+    in the requested language. A reply with no fence is taken whole if it parses;
+    otherwise the code is recovered from between the prose. The system prompt asks for
+    no Markdown, yet {fencers} of the {e1['n_models']} models fence their English code
+    anyway. Against the first version of the extractor, which joined every block and
+    required a fence, smell production moves by at most {ind_shift:.1f} points in any
+    language; validity moves by 5 points or more {moved_txt}.</li>
     <li><strong>Detectors.</strong> Experiment 1 uses the Python detector, {n_cov} of 25
-    smells, built on Python's own parser. Experiment 2 uses one tree-sitter detector for
-    all four languages, {len(APPLICABLE)} of 25 smells, so each smell has a single
-    definition; Python is re-scored with it so the four columns share an instrument.</li>
-    <li><strong>Uncertainty.</strong> Intervals come from resampling whole prompts 500
-    times, because one prompt's files rise and fall together.</li>
-    <li><strong>Excluded.</strong> <code>mamba-codestral-7b</code> substitutes a wrong token about once
-    in every 140 and only 6 of 20 files parse. Five causes were tested: two were
-    pipeline faults and were fixed, three were ruled out, leaving the published model
-    itself. The release notes record what was tested.</li>
+    smells, built on Python's own parser. Experiments 2 and 3 use one tree-sitter
+    detector for all four languages, {len(APPLICABLE)} of 25 smells, so each smell has a
+    single definition; Python is re-scored with it so the columns share an
+    instrument.</li>
+    <li><strong>Uncertainty.</strong> Each difference is recomputed in 1,000 resamples
+    of whole prompts, because one prompt's files rise and fall together.</li>
+    <li><strong>Excluded.</strong> <code>mamba-codestral-7b</code> substitutes a wrong
+    token about once in every 140 and only 6 of 20 files parse. Five causes were tested:
+    two were pipeline faults and were fixed, three were ruled out, leaving the published
+    model itself. The release notes record what was tested.</li>
   </ul>
   {controls}
   <details>
@@ -446,14 +605,15 @@ def build(analysis: Path, xlang: Path, docs: Path):
 <section>
   <h2>Data and code</h2>
   <ul>
-    <li><a href="{REPO}">Repository</a>: detectors, pipeline, and the ported prompt sets
-    in <code>dataset/</code>.</li>
+    <li><a href="{REPO}">Repository</a>: detectors, pipeline, the ported prompt sets in
+    <code>dataset/</code> and every translation in <code>dataset/translations/</code>.</li>
     <li>Scores: <a href="{REPO}/tree/main/_analysis_fullsize"><code>_analysis_fullsize/</code></a>
     (Experiment 1) and <a href="{REPO}/tree/main/_analysis_xlang"><code>_analysis_xlang/</code></a>
-    (Experiment 2), one row per file in <code>per_file.csv</code>.</li>
+    (Experiments 2 and 3), one row per file in <code>per_file.csv</code>, every reported
+    difference in <code>effects.csv</code>.</li>
     <li><a href="{REPO}/releases">Data download</a>: every generated file and every
     model's untouched reply.</li>
-    <li>Rebuild this page: <code>python -m pipeline.make_site</code>.</li>
+    <li>Rebuild everything: <code>bash pipeline/rebuild_results.sh</code>.</li>
   </ul>
 </section>
 </div></body></html>

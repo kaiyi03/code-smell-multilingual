@@ -2,16 +2,16 @@
 """
 Package the generations, scores and run metadata as a GitHub Release asset.
 
-The repository holds code and aggregate CSVs and is 2 MB. The actual experimental
-output -- ~19,000 generated files and their per-file scores -- is 156 MB and lives
-only on ARC scratch and one laptop. ARC's $DATA is not a backed-up archive, so
-losing it means regenerating, which is the GPU time this whole phase spent.
+The repository holds code and aggregate CSVs. The experimental output -- every
+generated file, every untouched reply and the per-file scores -- lives only on ARC
+scratch and one laptop otherwise. ARC's $DATA is not a backed-up archive, so losing
+it means regenerating, which is the GPU time this whole study spent.
 
 A Release asset is the right home: durable, versioned, and downloaded only by
 people who want it, so it does not bloat every clone.
 
-    python -m pipeline.make_release --outputs ../outputs_arc --dry-run
-    python -m pipeline.make_release --outputs ../outputs_arc --tag data-2026-09
+    python -m pipeline.make_release --outputs ../outputs_arc --scored ../outputs_scored --dry-run
+    python -m pipeline.make_release --outputs ../outputs_arc --scored ../outputs_scored --tag data-2026-10
 
 Requires the gh CLI, authenticated.
 """
@@ -129,15 +129,32 @@ def survey_xlang(outputs: Path):
         if not base.is_dir():
             continue
         for mdir in sorted(p for p in base.iterdir() if p.is_dir()):
-            n = sum(len(list((ldir / "code").glob("*" + ext)))
-                    for ldir in mdir.iterdir()
-                    if ldir.is_dir() and (ldir / "code").is_dir())
-            rows.append((plang, mdir.name, n))
-            totals[plang] += n
+            counts = {}
+            for lang in LANGS:
+                code = mdir / lang / "code"
+                counts[lang] = len(list(code.glob("*" + ext))) if code.is_dir() else 0
+                totals[plang] += counts[lang]
+            rows.append((plang, mdir.name, counts))
     return rows, totals
 
 
-def write_manifest(outputs: Path, rows, totals, dest: Path, xrows=(), xtotals=None):
+def lint_density(analysis: Path):
+    """Lint violations per 100 lines, for files that parse and files that do not."""
+    path = analysis / "per_file.csv"
+    if not path.exists():
+        return None
+    with open(path, encoding="utf-8") as f:
+        rows = [r for r in csv.DictReader(f) if r["model"] != "mamba-codestral-7b"]
+    out = {}
+    for ok in ("1", "0"):
+        g = [r for r in rows if r["syntax_ok"] == ok]
+        lines = sum(int(r["loc"]) for r in g)
+        out[ok] = 100.0 * sum(int(r["ruff_total"]) for r in g) / lines if lines else 0.0
+    return out
+
+
+def write_manifest(outputs: Path, rows, totals, dest: Path, xrows=(), xtotals=None,
+                   density=None):
     """A README inside the archive, so it is readable without this repo."""
     complete = [m for m, c in rows if all(c[l] == FULL for l in LANGS)]
     partial = [(m, c) for m, c in rows if 0 < sum(c.values()) < FULL * len(LANGS)]
@@ -155,28 +172,36 @@ def write_manifest(outputs: Path, rows, totals, dest: Path, xrows=(), xtotals=No
         "Open-weight code models asked to write code containing a named code smell.",
         "426 prompts covering 25 smells, greedy decoding at 2048 new tokens.",
         "",
-        "Two arms, and they vary different things:",
+        "Three experiments, varying different things:",
         "",
         "- **Prompt language.** The same Python task asked in English, Spanish,",
-        "  French and Chinese.",
-        "- **Target language.** The same English task asked for Python, Java, C++",
-        "  and C. English only -- the ported prompt sets were never translated, so",
-        "  this is not a four-by-four design.",
+        "  French and Chinese, of every model.",
+        "- **Programming language.** The same English task asked for Python, Java,",
+        "  C++ and C, of five models.",
+        "- **Both at once.** The Java, C++ and C prompts translated into Spanish,",
+        "  French and Chinese the same way as the Python ones, for the same five",
+        "  models, so every prompt language meets every programming language.",
         "",
         "## Layout",
         "",
         "```",
-        "outputs_arc/<model>/<lang>/code/<prompt_id>.py   extracted code, one per prompt",
-        "outputs_arc/<model>/<lang>/results.jsonl         raw response, prompt, tokens, timing",
-        "outputs_arc/<plang>/<model>/en/code/…            the same, for java, cpp and c",
-        "analysis/per_file.csv                            every file scored, one row each",
-        "analysis_xlang/per_file.csv                      the cross-language scores",
-        "analysis/by_*.csv                                aggregates used by the results page",
-        "prompts/prompts_core*.json                       the prompt sets, incl. ported ones",
+        "outputs_arc/<model>/<lang>/results.jsonl         untouched reply, prompt, tokens, timing",
+        "outputs_arc/<model>/<lang>/code/<prompt_id>.py   code as extracted at generation time",
+        "outputs_arc/<plang>/<model>/<lang>/…             the same, for java, cpp and c",
+        "outputs_scored/…                                 the code that was scored (same layout)",
+        "analysis/per_file.csv                            every Python file scored (experiment 1)",
+        "analysis_xlang/per_file.csv                      the cross-language scores (2 and 3)",
+        "analysis*/effects.csv                            every reported difference, with interval",
+        "analysis*/extraction_check.csv                   what the extractor change did, per cell",
+        "prompts/prompts_core*.json                       the English prompt sets, incl. ported",
+        "prompts/translations/prompts_<lang>[_<plang>].json   every machine translation",
         "```",
         "",
-        "`results.jsonl` carries the untouched model response alongside the extracted",
-        "code, so an extraction bug can be diagnosed without regenerating.",
+        "Scores are computed on `outputs_scored/`, which pipeline/reextract.py rebuilds",
+        "from the untouched replies in `results.jsonl`: the first fenced block in the",
+        "requested language, or for a reply with no fence the code between the prose.",
+        "The `code/` folders under `outputs_arc/` are the generation-time extraction,",
+        "kept for comparison; it joined every fenced block and needed a fence.",
         "",
         "## Coverage",
         "",
@@ -190,14 +215,14 @@ def write_manifest(outputs: Path, rows, totals, dest: Path, xrows=(), xtotals=No
         "",
         f"{len(complete)} models complete at {FULL} prompts in all four languages.",
         "",
-        "### Cross-language arm (English prompts)",
+        "### Java, C++ and C",
         "",
-        "| Language | Model | Files | Of |",
-        "|---|---|---:|---:|",
+        f"| Language | Model | {' | '.join(LANGS)} |",
+        f"|---|---|{'---:|' * len(LANGS)}",
     ]
-    for plang, model, n in xrows:
-        want = XFULL.get(plang, FULL)
-        lines.append(f"| {plang} | {model} | {n} | {want} |")
+    for plang, model, counts in xrows:
+        cells = " | ".join(str(counts[l]) if counts[l] else "—" for l in LANGS)
+        lines.append(f"| {plang} | {model} | {cells} |")
     if xtotals:
         lines.append("")
         lines.append("Totals: " + ", ".join(f"{p} {xtotals[p]}" for p in PLANGS
@@ -222,10 +247,16 @@ def write_manifest(outputs: Path, rows, totals, dest: Path, xrows=(), xtotals=No
         "## Caveats worth knowing before using this",
         "",
         "- Numbers should be read on files that **parse**. A file that is not valid",
-        "  Python has no code quality to measure, and the per-100-line metrics",
-        "  explode on it: parsing files average 6.4 violations per 100 lines,",
-        "  non-parsing ones average 1,182.",
+        "  code has no smell or quality to measure"
+        + (f", and per-100-line metrics inflate on it: parsing Python files average "
+           f"{density['1']:.1f} lint violations per 100 lines, non-parsing ones "
+           f"{density['0']:.0f}." if density else "."),
         "- Language comparisons should use prompts present in **every** language.",
+        "- Greedy decoding is exactly reproducible on one machine, not across GPU",
+        "  nodes: a small share of answers differ between nodes.",
+        "- `codellama-7b` was generated twice. Its first run's four jobs were",
+        "  submitted twice and ran at once, interleaving writes to the same logs;",
+        "  it was regenerated in October 2026 as single jobs, and this is that run.",
         "- An earlier 75-prompt pilot is superseded. It selected one prompt per",
         "  smell per level by taking the first alphabetically, which is systematic",
         "  rather than random, and it made Chinese look 9 points worse than the",
@@ -239,6 +270,8 @@ def write_manifest(outputs: Path, rows, totals, dest: Path, xrows=(), xtotals=No
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--outputs", default="../outputs_arc")
+    ap.add_argument("--scored", default="../outputs_scored",
+                    help="the re-extracted tree the scores were computed on")
     ap.add_argument("--analysis", default="_analysis_fullsize")
     ap.add_argument("--xanalysis", default="_analysis_xlang",
                     help="cross-language scores; skipped if it does not exist")
@@ -259,18 +292,18 @@ def main():
 
     xrows, xtotals = survey_xlang(outputs)
     if xrows:
-        print(f"\n{'cross-language':26s}{'files':>7s}{'of':>7s}")
-        for plang, model, n in xrows:
+        print(f"\n{'cross-language':30s}" + "".join(f"{l:>6s}" for l in LANGS))
+        for plang, model, counts in xrows:
             want = XFULL.get(plang, FULL)
-            flag = "" if n == want else "  <- short"
-            print(f"{plang + '/' + model:26s}{n:7d}{want:7d}{flag}")
-        print(f"{'TOTAL':26s}{sum(xtotals.values()):7d}")
+            flag = "" if all(counts[l] == want for l in LANGS) else "  <- short"
+            print(f"{plang + '/' + model:30s}" + "".join(f"{counts[l]:6d}" for l in LANGS) + flag)
+        print(f"{'TOTAL':30s}{sum(xtotals.values()):6d}")
 
     staging = PROJECT_ROOT / "_release"
     staging.mkdir(exist_ok=True)
     manifest = staging / "MANIFEST.md"
     complete, partial, empty = write_manifest(outputs, rows, totals, manifest,
-                                              xrows, xtotals)
+                                              xrows, xtotals, lint_density(analysis))
     print(f"\n{len(complete)} complete, {len(partial)} partial, {len(empty)} absent")
 
     archive = staging / f"code-smell-generations-{args.tag}.tar.gz"
@@ -278,6 +311,11 @@ def main():
     with tarfile.open(archive, "w:gz") as tar:
         tar.add(manifest, arcname="MANIFEST.md")
         tar.add(outputs, arcname="outputs_arc")
+        scored = Path(args.scored).resolve()
+        if scored.is_dir():
+            tar.add(scored, arcname="outputs_scored")
+        else:
+            print(f"  note: no re-extracted tree at {scored}; the archive will lack it")
         if analysis.is_dir():
             for f in sorted(analysis.glob("*.csv")):
                 tar.add(f, arcname=f"analysis/{f.name}")
@@ -287,6 +325,8 @@ def main():
                 tar.add(f, arcname=f"analysis_xlang/{f.name}")
         for f in sorted((PROJECT_ROOT / "dataset").glob("prompts_core*.json")):
             tar.add(f, arcname=f"prompts/{f.name}")
+        for f in sorted((PROJECT_ROOT / "dataset" / "translations").glob("*.json")):
+            tar.add(f, arcname=f"prompts/translations/{f.name}")
     size_mb = archive.stat().st_size / 1e6
     print(f"  {size_mb:.0f} MB")
     if size_mb > 2000:
@@ -296,10 +336,11 @@ def main():
         print(f"\ndry run -- archive left at {archive}")
         return
 
-    notes = (f"Generations, per-file scores and run metadata from the ARC run.\n\n"
-             f"{len(complete)} of {len(rows)} models complete at {FULL} prompts in all "
-             f"four languages. See MANIFEST.md inside the archive for coverage and "
-             f"caveats.\n")
+    notes = (f"Generations, per-file scores and run metadata from the ARC runs: "
+             f"prompt language (Python, {len(complete)} models complete in all four "
+             f"languages), programming language and both at once (Java, C++ and C, "
+             f"{len({m for _, m, _ in xrows})} models). See MANIFEST.md inside the "
+             f"archive for coverage and caveats.\n")
     print(f"\ncreating release {args.tag} ...", flush=True)
     subprocess.run(["gh", "release", "create", args.tag, str(archive),
                     "--title", f"Generations and scores ({args.tag})",
