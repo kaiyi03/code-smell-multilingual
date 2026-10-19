@@ -1,0 +1,50 @@
+# The cross-language arm in Spanish, French and Chinese: 5 models x 3 programming
+# languages x 3 natural languages. English for these is already complete.
+# Longest first (StarCoder2-7B always runs to the output limit), so the slowest
+# cells are not the last to start.
+# model               plang  lang
+starcoder2-7b         java   es
+starcoder2-7b         java   fr
+starcoder2-7b         java   zh
+starcoder2-7b         cpp    es
+starcoder2-7b         cpp    fr
+starcoder2-7b         cpp    zh
+starcoder2-7b         c      es
+starcoder2-7b         c      fr
+starcoder2-7b         c      zh
+yi-coder-9b           java   es
+yi-coder-9b           java   fr
+yi-coder-9b           java   zh
+granite-8b-code       cpp    es
+granite-8b-code       cpp    fr
+granite-8b-code       cpp    zh
+granite-8b-code       c      es
+granite-8b-code       c      fr
+granite-8b-code       c      zh
+yi-coder-9b           cpp    es
+yi-coder-9b           cpp    fr
+yi-coder-9b           cpp    zh
+qwen2.5-coder-7b      cpp    es
+qwen2.5-coder-7b      cpp    fr
+qwen2.5-coder-7b      cpp    zh
+yi-coder-9b           c      es
+yi-coder-9b           c      fr
+yi-coder-9b           c      zh
+deepseek-coder-6.7b   java   es
+deepseek-coder-6.7b   java   fr
+deepseek-coder-6.7b   java   zh
+deepseek-coder-6.7b   cpp    es
+deepseek-coder-6.7b   cpp    fr
+deepseek-coder-6.7b   cpp    zh
+qwen2.5-coder-7b      java   es
+qwen2.5-coder-7b      java   fr
+qwen2.5-coder-7b      java   zh
+granite-8b-code       java   es
+granite-8b-code       java   fr
+granite-8b-code       java   zh
+deepseek-coder-6.7b   c      es
+deepseek-coder-6.7b   c      fr
+deepseek-coder-6.7b   c      zh
+qwen2.5-coder-7b      c      es
+qwen2.5-coder-7b      c      fr
+qwen2.5-coder-7b      c      zh
