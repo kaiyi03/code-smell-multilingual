@@ -19,7 +19,15 @@ language, the drift does not predict syntax failure or induction rate, so this
 preserves comparability at no known cost. --mask implements the alternative when
 that decision is made.
 
+The Java, C++ and C prompt sets are translated the same way, from their English
+ports (--plang). Porting always comes before translation, because the porting
+rules in dataset/port_prompts.py are written for English text. Translating the
+port with the same model and settings keeps the natural-language manipulation
+identical whichever programming language the prompt asks for, which is what lets
+a Spanish Java prompt be compared with a Spanish Python one.
+
     python -m pipeline.translate_prompts --lang es --lang fr --lang zh
+    python -m pipeline.translate_prompts --lang es --plang java
     python -m pipeline.translate_prompts --lang es --limit 4     # smoke test
 """
 
@@ -34,6 +42,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 DATASET = PROJECT_ROOT / "dataset" / "prompts_core.json"
+PLANGS = ("python", "java", "cpp", "c")
 NLLB_CODE = {"zh": "zho_Hans", "es": "spa_Latn", "fr": "fra_Latn"}
 MODEL_ID = "facebook/nllb-200-distilled-600M"
 
@@ -41,6 +50,18 @@ MODEL_ID = "facebook/nllb-200-distilled-600M"
 CODE_SPAN = re.compile(r"\b[a-z]+_[a-z_0-9]+\b\s*\([^)]*\)"
                        r"|\b[a-z]+_[a-z_0-9]+\b"
                        r"|\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)+\b")
+
+
+def source_set(plang):
+    """The English prompts a translation starts from: Python's, or a port of them."""
+    if plang == "python":
+        return DATASET
+    return PROJECT_ROOT / "dataset" / f"prompts_core_{plang}.json"
+
+
+def cache_name(lang, plang):
+    """prompts_es.json for Python, as it always was; prompts_es_java.json for a port."""
+    return f"prompts_{lang}.json" if plang == "python" else f"prompts_{lang}_{plang}.json"
 
 
 def mask(text):
@@ -64,6 +85,8 @@ def unmask(text, table):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--lang", action="append", required=True, choices=list(NLLB_CODE))
+    ap.add_argument("--plang", default="python", choices=PLANGS,
+                    help="which English prompt set to translate (default python)")
     ap.add_argument("--limit", type=int, help="first N prompts (smoke test)")
     ap.add_argument("--out", default=os.environ.get("PROMPT_CACHE", "_prompts"))
     ap.add_argument("--mask", action="store_true",
@@ -74,11 +97,12 @@ def main():
     import torch
     from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
-    with open(DATASET, encoding="utf-8") as f:
+    with open(source_set(args.plang), encoding="utf-8") as f:
         prompts = json.load(f)
     if args.limit:
         prompts = prompts[:args.limit]
-    print(f"{len(prompts)} prompts, masking {'on' if args.mask else 'off'}", flush=True)
+    print(f"{len(prompts)} {args.plang} prompts, masking {'on' if args.mask else 'off'}",
+          flush=True)
 
     outdir = Path(args.out)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -92,7 +116,7 @@ def main():
     tok.src_lang = "eng_Latn"
 
     for lang in args.lang:
-        path = outdir / f"prompts_{lang}.json"
+        path = outdir / cache_name(lang, args.plang)
         existing = {}
         if path.exists():
             with open(path, encoding="utf-8") as f:

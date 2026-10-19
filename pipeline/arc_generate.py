@@ -72,6 +72,27 @@ PLANG_SYSTEM = {
          "markdown formatting.",
 }
 PLANG_EXT = {"python": "py", "java": "java", "cpp": "cpp", "c": "c"}
+PLANG_NAME = {"java": "Java", "cpp": "C++", "c": "C"}
+
+
+def system_prompt(lang, plang):
+    """The instruction for one cell of the language x programming-language grid.
+
+    Outside English and Python there is no hand translation to use, so this takes
+    the hand-translated Python instruction for that language and swaps only the
+    language name. That is the same substitution that turns the English Python
+    instruction into PLANG_SYSTEM, which the assertion below checks, so every cell
+    states the output contract in the same words.
+    """
+    if plang == "python":
+        return SYSTEM_PROMPTS[lang]
+    if lang == "en":
+        return PLANG_SYSTEM[plang]
+    return SYSTEM_PROMPTS[lang].replace("Python", PLANG_NAME[plang])
+
+
+assert all(SYSTEM_PROMPT.replace("Python", name) == PLANG_SYSTEM[pl]
+           for pl, name in PLANG_NAME.items())
 
 # ---- extractor, from fix_extraction.ipynb (parse-validated) -----------------
 FENCE_BLOCK = re.compile(r"```[ \t]*[A-Za-z0-9_+\-.]*[ \t]*\r?\n(.*?)```", re.DOTALL)
@@ -164,20 +185,20 @@ def build_generation_prompt(tok, system, user):
 # ---------------------------------------------------------------------------
 
 def load_prompts(lang, cache_dir, plang="python"):
-    if plang != "python":
-        path = PROJECT_ROOT / "dataset" / f"prompts_core_{plang}.json"
+    if lang == "en":
+        path = (DATASET if plang == "python"
+                else PROJECT_ROOT / "dataset" / f"prompts_core_{plang}.json")
         if not path.exists():
             sys.exit(f"no {plang} prompt set at {path}\n"
                      f"  run: python -m dataset.port_prompts --lang {plang}")
         with open(path, encoding="utf-8") as f:
-            return [dict(p, prompt_en=p["prompt"], lang=lang) for p in json.load(f)]
-    if lang == "en":
-        with open(DATASET, encoding="utf-8") as f:
             return [dict(p, prompt_en=p["prompt"], lang="en") for p in json.load(f)]
-    path = Path(cache_dir) / f"prompts_{lang}.json"
+    # Translations are cached outside the repo, one file per language and prompt set.
+    name = f"prompts_{lang}.json" if plang == "python" else f"prompts_{lang}_{plang}.json"
+    path = Path(cache_dir) / name
     if not path.exists():
         sys.exit(f"no translated prompts at {path}\n"
-                 f"  run: python -m pipeline.translate_prompts --lang {lang}")
+                 f"  run: python -m pipeline.translate_prompts --lang {lang} --plang {plang}")
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
@@ -196,11 +217,8 @@ def main():
     args = ap.parse_args()
 
     # The two axes are independent: --lang is the language the request is written
-    # in, --plang the language the answer should be in. Only the Python prompt set
-    # has been translated so far, so the others are English-only for now.
-    if args.plang != "python" and args.lang != "en":
-        sys.exit(f"--plang {args.plang} has no {args.lang} prompt set; "
-                 f"port_prompts.py produces English only")
+    # in, --plang the language the answer should be in. A non-English, non-Python
+    # cell reads the translation of the port, made by translate_prompts --plang.
 
     cfg = next((m for m in MODELS if m["id"] == args.model), None)
     if cfg is None:
@@ -296,8 +314,7 @@ def main():
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
-    system = (SYSTEM_PROMPTS[args.lang] if args.plang == "python"
-              else PLANG_SYSTEM[args.plang])
+    system = system_prompt(args.lang, args.plang)
     started = time.time()
     with open(results, "a", encoding="utf-8") as out:
         for i, p in enumerate(todo, 1):
