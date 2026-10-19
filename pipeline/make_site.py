@@ -414,8 +414,8 @@ def build(analysis: Path, xlang: Path, docs: Path):
             and all(d["same"] == d["n"] for d in d2v))
     findings.append(
         f"<strong>The programming language matters smell by smell, not on "
-        f"average.</strong> Overall, Java, C++ and C are within "
-        f"{max(abs(d['est']) for d in d2v):.0f} points of Python"
+        f"average.</strong> Overall, Java, C++ and C are at most "
+        f"{max(abs(d['est']) for d in d2v):.1f} points from Python"
         + ((" (" + plain_list(f"{PLANG[p]} {signed(d2[p]['est'])}" for p in PORDER[1:] if d2.get(p))
             + (", every model leaning the same way" if lean else "") + ")") if d2v else "")
         + f"; smell by smell they differ by up to {top_vals[hi_l] - top_vals[lo_l]:.0f} "
