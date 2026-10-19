@@ -84,8 +84,10 @@ class Cells:
 
 def contrast(cells, combine, label_rows):
     """Point estimate, interval and per-model agreement for combine(rates) -> value."""
-    rng = np.random.default_rng(SEED)
     n = len(cells.prompts)
+    if not n:
+        return []          # nothing answered in every cell compared
+    rng = np.random.default_rng(SEED)
     point = [combine(r) for r in cells.rates()]
     draws = [[], []]
     for _ in range(RESAMPLES):

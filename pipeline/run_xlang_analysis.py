@@ -37,12 +37,18 @@ reference measured slightly more leniently than it looks is worth knowing about.
 Two denominators, and they are different
 ----------------------------------------
 Validity is measured on every file. Induction is measured only on prompts whose
-target smell this detector can decide -- 114 of 426, because six smells are
-tree-shaped and the other nineteen are not. A smell that cannot be decided is
-recorded as blank, never as a miss: scoring "we cannot tell" as "the model failed"
-would manufacture a result out of a gap in the instrument.
+target smell this detector can decide in that language. A smell that cannot be
+decided is recorded as blank, never as a miss: scoring "we cannot tell" as "the
+model failed" would manufacture a result out of a gap in the instrument.
 
-    python -m pipeline.run_xlang_analysis --root ../outputs_arc --out _analysis_xlang
+Both languages at once
+----------------------
+The ported prompts were also translated into Spanish, French and Chinese, so the
+same five models answer every combination of prompt language and programming
+language. by_plang_lang.csv is that grid, each programming language matched on
+the prompts present in all four of its prompt languages.
+
+    python -m pipeline.run_xlang_analysis --root ../outputs_scored --out _analysis_xlang
 """
 
 import argparse
@@ -275,10 +281,9 @@ def main():
 
     plangs = [p for p in LANGUAGES if any(r["plang"] == p for r in agg)]
 
-    # The programming-language comparison is English-only: the ported prompt sets
-    # were never translated, so a Spanish Java cell does not exist. Mixing the
-    # Python arm's four natural languages into a contrast against English-only Java
-    # would put the prompt language inside the programming-language effect.
+    # The programming-language comparison uses English prompts only. Mixing in the
+    # other prompt languages would put the prompt-language effect inside the
+    # programming-language one; the grid further down crosses the two instead.
     #
     # The same models in every language, too. The Python column is read from the
     # prompt-language experiment, which ran 13 models; Java, C++ and C ran 5. The
@@ -315,6 +320,34 @@ def main():
                          {"plang": p, "model": m})
                for p in plangs for m in models
                if any(r["plang"] == p and r["model"] == m for r in en)])
+
+    # ------------------------------------------------- both languages at once
+    # The same five models across the full grid. Within each programming language,
+    # keep the (model, prompt) pairs answered in every prompt language, so a change
+    # from English is never a change in which prompts were asked.
+    grid = [r for r in agg if r["model"] in xmodels] if xmodels else []
+    langs = [l for l in ("en", "es", "fr", "zh") if any(r["lang"] == l for r in grid)]
+    grid_rows, grid_model_rows = [], []
+    for p in plangs:
+        g = [r for r in grid if r["plang"] == p]
+        have = defaultdict(set)
+        for r in g:
+            have[(r["model"], r["prompt_id"])].add(r["lang"])
+        keep = {k for k, v in have.items() if v >= set(langs)}
+        if not keep:
+            continue
+        g = [r for r in g if (r["model"], r["prompt_id"]) in keep]
+        for l in langs:
+            gl = [r for r in g if r["lang"] == l]
+            if gl:
+                grid_rows.append(summarise(gl, {"plang": p, "lang": l}))
+            for m in models:
+                gm = [r for r in gl if r["model"] == m]
+                if gm:
+                    grid_model_rows.append(summarise(gm, {"plang": p, "lang": l, "model": m}))
+    if len({r["lang"] for r in grid_rows if r["plang"] != "python"}) > 1:
+        write_csv(outdir / "by_plang_lang.csv", grid_rows)
+        write_csv(outdir / "by_plang_lang_model.csv", grid_model_rows)
 
     by_smell = []
     for smell in sorted(APPLICABLE):
@@ -379,6 +412,20 @@ def main():
     print("\n  Thresholds are identical across the four grammars, but base rates are")
     print("  not -- so the lift column is the comparable one, and a raw induction")
     print("  rate read across languages will mislead.")
+
+    if len({r["lang"] for r in grid_rows if r["plang"] != "python"}) > 1:
+        print("\n" + "=" * 78)
+        print("BOTH LANGUAGES AT ONCE: validity / induction, same models throughout")
+        print("=" * 78)
+        print(f"  {'plang':9s}" + "".join(f"{l:>16s}" for l in langs))
+        for p in plangs:
+            cells = {r["lang"]: r for r in grid_rows if r["plang"] == p}
+            if not cells:
+                continue
+            print(f"  {p:9s}" + "".join(
+                f"{cells[l]['syntax_ok_pct']:7.1f} / {cells[l]['induction_valid']:5.1f}"
+                if l in cells and cells[l]["induction_valid"] != "" else f"{'--':>16s}"
+                for l in langs))
 
 
 if __name__ == "__main__":

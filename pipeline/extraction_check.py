@@ -1,120 +1,98 @@
 #!/usr/bin/env python3
 """
-How much of the validity gap is the code extractor rather than the model.
+What changing the extractor did, cell by cell.
 
-The extractor (pipeline/arc_generate.py) looks for code inside a Markdown fence.
-Some models drop the fence in some languages: Granite in Spanish writes the word
-"python" on its own line and then the code, with prose before and after. Nothing
-fenced is found, the whole reply is taken as code, and the prose makes it fail to
-parse. The model wrote the code; the extractor could not find it.
+Every score is computed from the code pipeline/extract.py takes out of each reply;
+that file explains why it replaced the first version, which still runs at
+generation time. This puts the two side by side. The same analysis is run twice,
+once on the files the generation jobs extracted and once on the re-extracted ones,
+and for every model, prompt language and programming language this reports
+validity and induction under both, with how each reply's code was found:
 
-This does not change any score. It re-reads the untouched replies and reports,
-per model and prompt language, validity as scored beside validity when code is
-also accepted without a fence: taken from the first line that starts a Python
-statement, trailing lines dropped until it parses. Whether a dropped fence should
-count as a failure is a judgement about the task -- following the requested
-format, or writing the code -- and is left to the write-up.
+    first_block   the first fenced block in the target language
+    whole         no fence, and the whole reply is code
+    fence_free    no fence; code recovered from between the prose
+    unparsed      no fence and no code that parses
 
-    python -m pipeline.extraction_check --root ../outputs_arc --out _analysis_fullsize
+A model that follows the system prompt's "no Markdown" leaves its replies unfenced,
+so 100 - first_block_pct is the share of replies with no fence.
+
+    python -m pipeline.extraction_check --original ../_scored_original/fullsize \\
+        --current _analysis_fullsize --scored ../outputs_scored
 """
 
 import argparse
-import ast
 import csv
 import json
-import re
-import warnings
+from collections import Counter, defaultdict
 from pathlib import Path
 
-# Generated code is full of invalid escape sequences such as "\w" in ordinary
-# strings. Parsing it is the point; the warnings about it are noise.
-warnings.filterwarnings("ignore", category=SyntaxWarning)
-
-FENCE = "`" * 3
-STATEMENT = re.compile(r"^(def |class |import |from |@|async def )")
-MIN_LINES = 3
+STEPS = ("first_block", "whole", "fence_free", "unparsed")
 
 
-def parses(src):
-    try:
-        ast.parse(src)
-        return True
-    except (SyntaxError, ValueError, MemoryError, RecursionError):
-        return False
+def read(path):
+    with open(path, encoding="utf-8") as f:
+        return list(csv.DictReader(f))
 
 
-def fence_free(raw):
-    """Code starting at the first statement line, trimmed until it parses."""
-    lines = raw.splitlines()
-    start = next((i for i, l in enumerate(lines) if STATEMENT.match(l)), None)
-    if start is None:
-        return None
-    body = lines[start:]
-    for end in range(len(body), 0, -1):
-        src = "\n".join(body[:end])
-        if len(src.strip().splitlines()) >= MIN_LINES and parses(src):
-            return src
-    return None
+def rates(rows):
+    valid = [r for r in rows if r["syntax_ok"] == "1"]
+    dec = [r for r in valid if r["target_covered"] == "1"]
+    return (round(100.0 * len(valid) / len(rows), 2) if rows else "",
+            round(100.0 * sum(r["target_hit"] == "1" for r in dec) / len(dec), 2) if dec else "")
 
 
-def check(lang_dir):
-    log = lang_dir / "results.jsonl"
-    if not log.exists():
-        return None
-    replies = {}
-    # errors="replace": one CodeLlama log has bytes that are not UTF-8.
-    for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
-        try:
-            r = json.loads(line)
-            replies.setdefault(r["prompt_id"], r.get("raw_response") or "")
-        except (json.JSONDecodeError, KeyError):
-            continue
-    n = scored = recovered = unfenced = 0
-    for pid, raw in replies.items():
-        code_file = lang_dir / "code" / f"{pid}.py"
-        if not code_file.exists():
-            continue
-        n += 1
-        ok = parses(code_file.read_text(encoding="utf-8", errors="replace"))
-        scored += ok
-        if FENCE not in raw:
-            unfenced += 1
-        if ok or (FENCE not in raw and fence_free(raw)):
-            recovered += 1
-    if not n:
-        return None
-    return {"n": n,
-            "valid_scored_pct": round(100.0 * scored / n, 2),
-            "valid_fence_free_pct": round(100.0 * recovered / n, 2),
-            "unfenced_pct": round(100.0 * unfenced / n, 2)}
+def steps(scored, plang, model, lang):
+    cell = (Path(scored) / model / lang if plang == "python"
+            else Path(scored) / plang / model / lang)
+    c = Counter()
+    path = cell / "results.jsonl"
+    if path.exists():
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                c[json.loads(line)["extraction"]] += 1
+    return c
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--root", required=True, help="generation root (Python layout)")
-    ap.add_argument("--out", default="_analysis_fullsize")
-    ap.add_argument("--exclude", action="append", default=["mamba-codestral-7b"])
+    ap.add_argument("--original", required=True,
+                    help="analysis directory scored on the generation-time extraction")
+    ap.add_argument("--current", required=True, help="analysis directory scored on extract.py")
+    ap.add_argument("--scored", required=True, help="the re-extracted output tree")
     args = ap.parse_args()
 
-    rows = []
-    for mdir in sorted(p for p in Path(args.root).iterdir() if p.is_dir()):
-        if mdir.name in args.exclude or mdir.name in ("java", "cpp", "c"):
-            continue
-        for lang in ("en", "es", "fr", "zh"):
-            res = check(mdir / lang)
-            if res:
-                rows.append({"model": mdir.name, "lang": lang, **res})
-    out = Path(args.out) / "extraction_check.csv"
-    with open(out, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+    groups = {}
+    for name, d in (("original", args.original), ("current", args.current)):
+        g = defaultdict(list)
+        for r in read(Path(d) / "per_file.csv"):
+            g[(r.get("plang", "python"), r["model"], r["lang"])].append(r)
+        groups[name] = g
+
+    out = []
+    for key in sorted(groups["current"]):
+        plang, model, lang = key
+        cur = groups["current"][key]
+        orig = groups["original"].get(key, [])
+        st = steps(args.scored, plang, model, lang)
+        n = sum(st.values()) or len(cur)
+        v0, i0 = rates(orig)
+        v1, i1 = rates(cur)
+        out.append({"plang": plang, "model": model, "lang": lang, "n": len(cur),
+                    "valid_original": v0, "valid": v1,
+                    "induction_original": i0, "induction": i1,
+                    **{f"{s}_pct": round(100.0 * st[s] / n, 2) for s in STEPS}})
+
+    path = Path(args.current) / "extraction_check.csv"
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(out[0]))
         w.writeheader()
-        w.writerows(rows)
-    print(f"wrote {out} ({len(rows)} rows)")
-    for r in rows:
-        gain = r["valid_fence_free_pct"] - r["valid_scored_pct"]
-        if gain >= 5:
-            print(f"  {r['model']:22s} {r['lang']}  {r['valid_scored_pct']:5.1f}% -> "
-                  f"{r['valid_fence_free_pct']:5.1f}%   ({r['unfenced_pct']:.0f}% of replies unfenced)")
+        w.writerows(out)
+    print(f"wrote {path} ({len(out)} cells)")
+    for r in out:
+        if (isinstance(r["valid_original"], float) and abs(r["valid"] - r["valid_original"]) >= 5):
+            print(f"  {r['plang']:6s} {r['model']:22s} {r['lang']}  valid {r['valid_original']:5.1f}% -> "
+                  f"{r['valid']:5.1f}%   ({100 - r['first_block_pct']:.0f}% of replies unfenced)")
 
 
 if __name__ == "__main__":

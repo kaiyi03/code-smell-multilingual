@@ -12,12 +12,13 @@ source eng_Latn, four beams, max_length 512, float32, batches of 16. Determinist
 decoding, so re-running gives the same text.
 
 Identifiers are deliberately NOT protected from the translator here. NLLB rewrites
-19-30% of the API names the prompts specify (place_order -> lugar_orden), and doing
-that consistently would be a different experimental design -- one worth choosing on
-purpose rather than changing halfway through a corpus. Measured within each
-language, the drift does not predict syntax failure or induction rate, so this
-preserves comparability at no known cost. --mask implements the alternative when
-that decision is made.
+16-30% of the names the prompts specify (place_order -> lugar_orden), and protecting
+them would be a different experimental design -- one worth choosing on purpose
+rather than changing halfway through a corpus. On the 75-prompt pilot the loss did
+not predict induction; on the full set it does in Chinese, where prompts that lost a
+name lose about twice as much smell production as prompts that kept them all
+(pipeline/translation_check.py). The language effect is still there on prompts that
+kept every name. --mask implements the alternative if that design is chosen.
 
 The Java, C++ and C prompt sets are translated the same way, from their English
 ports (--plang). Porting always comes before translation, because the porting
