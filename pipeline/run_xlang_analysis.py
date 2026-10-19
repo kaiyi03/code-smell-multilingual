@@ -53,6 +53,7 @@ the prompts present in all four of its prompt languages.
 
 import argparse
 import json
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -107,6 +108,12 @@ def discover(root):
                     yield plang, mdir.name, ldir.name, ldir / "code"
 
 
+# An #include line that names no header. One model writes these, sometimes hundreds
+# in a row; no compiler accepts one, so they are counted to show how much of a
+# language's validity gap they explain.
+BARE_INCLUDE = re.compile(r"^[ 	]*#[ 	]*include[ 	]*$", re.MULTILINE)
+
+
 def _count_errors(node):
     n = 0
     stack = [node]
@@ -150,6 +157,7 @@ def score_file(path, src, plang, prompts, decidable):
     # Python-only, and a metric that exists for one arm of a four-way comparison is
     # worse than one that exists for all four.
     row["loc"] = sum(1 for ln in src.splitlines() if ln.strip())
+    row["bare_includes"] = len(BARE_INCLUDE.findall(src)) if plang in ("c", "cpp") else 0
 
     try:
         found_list = detect(data, plang)

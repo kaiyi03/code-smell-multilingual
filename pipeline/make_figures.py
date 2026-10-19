@@ -12,6 +12,10 @@ Three figures, each carrying one claim:
         effect is general or belongs to particular models
   fig4  the cross-language arm, smell by smell -- how far apart the four
         programming languages are on each smell, which the flat average hides
+  fig5  both languages at once -- how far each prompt language moves smell
+        production away from English, within each programming language
+
+Titles and captions describe what is plotted; the argument is the page's job.
 
 Usage:
     python -m pipeline.make_figures --analysis _analysis_fullsize --xlang _analysis_xlang
@@ -92,7 +96,7 @@ def fig1(rows, out):
     ax1.set_xticklabels([f"{LANG_NAME[l]}\n{val[i]:.0f}% valid"
                          for i, l in enumerate(langs)], fontsize=9)
     ax1.set_ylabel("ruff violations per 100 lines", fontsize=9.5, color=INK)
-    ax1.set_title("The metric is mostly reporting generation failure",
+    ax1.set_title("Lint violations per 100 lines, all files and parsing files",
                   fontsize=11, color=INK, loc="left", pad=10)
     ax1.legend(frameon=False, fontsize=9, loc="upper left")
 
@@ -107,7 +111,7 @@ def fig1(rows, out):
     ax2.set_xticklabels([LANG_NAME[l] for l in langs], fontsize=9)
     ax2.set_ylim(0, 100)
     ax2.set_ylabel("targeted smell produced (%)", fontsize=9.5, color=INK)
-    ax2.set_title("What does survive the control", fontsize=11, color=INK,
+    ax2.set_title("Requested smell produced, parsing files", fontsize=11, color=INK,
                   loc="left", pad=10)
 
     fig.text(0.008, 0.022, "Matched prompts only — the same tasks in every language",
@@ -154,8 +158,8 @@ def fig2(rows, out):
     ax.set_xlim(-2, 128)
     ax.set_xticks([0, 25, 50, 75, 100])
     ax.set_xlabel("generations containing the smell (%)", fontsize=9.5, color=INK)
-    ax.set_title("Which smells a model will produce on request — and which detectors\n"
-                 "can tell the difference", fontsize=11.5, color=INK, loc="left", pad=10)
+    ax.set_title("Each smell when asked for, and when another smell was asked for",
+                 fontsize=11.5, color=INK, loc="left", pad=10)
     ax.legend(frameon=False, fontsize=9, loc="lower right")
     fig.text(0.008, 0.02, "Valid Python only. Numbers are the asked-for rate and the "
              "lift over base rate. ⚠ marks a lift under 20 points — reported, not relied on.",
@@ -197,13 +201,13 @@ def fig3(rows, out):
     ax.tick_params(length=0)
     for s in ax.spines.values():
         s.set_visible(False)
-    ax.set_title("Syntax validity (%) — the language effect belongs to four models",
+    ax.set_title("Syntax validity (%) by model and prompt language",
                  fontsize=11, color=INK, loc="left", pad=12)
     cb = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
     cb.outline.set_visible(False)
     cb.ax.tick_params(colors=MUTED, length=0, labelsize=8)
     fig.text(0.008, 0.02, "Sorted by worst non-English cell. mamba-codestral-7b "
-             "excluded — 33% in English is a known load bug.",
+             "excluded (see the release notes).",
              fontsize=8.5, color=MUTED, ha="left")
     fig.tight_layout(rect=(0, 0.065, 1, 1))
     fig.savefig(out, dpi=200, facecolor=SURFACE)
@@ -274,6 +278,54 @@ def fig4(rows, out):
     print(f"  wrote {out.name}")
 
 
+# Prompt languages in fig5, from the Okabe-Ito hues fig4 leaves unused.
+LANG_COLOUR = {"es": "#CC79A7", "fr": "#56B4E9", "zh": INK}
+
+
+def fig5(rows, out):
+    """Change from English in each programming language, with its interval.
+
+    One row per programming language, one point per prompt language, so a reader
+    compares the Spanish, French and Chinese shifts within a language and the same
+    shift across languages without reading two tables.
+    """
+    eff = {(r["within"], r["contrast"].split(" ")[0]): r for r in rows
+           if r["experiment"] == "both" and r["metric"] == "induction"
+           and r["within"] in PLANG_NAME}
+    plangs = [p for p in PLANG_NAME if any(k[0] == p for k in eff)]
+    if not plangs:
+        return
+    fig, ax = plt.subplots(figsize=(8.6, 4.4), facecolor=SURFACE)
+    offs = {"es": -0.22, "fr": 0.0, "zh": 0.22}
+    for i, pl in enumerate(plangs):
+        for lang, dy in offs.items():
+            r = eff.get((pl, lang))
+            if not r:
+                continue
+            y = len(plangs) - 1 - i - dy
+            est, lo, hi = num(r, "estimate"), num(r, "ci_lo"), num(r, "ci_hi")
+            ax.plot([lo, hi], [y, y], color=LANG_COLOUR[lang], lw=2, alpha=0.55,
+                    solid_capstyle="round", zorder=2)
+            ax.scatter(est, y, s=46, color=LANG_COLOUR[lang], zorder=3,
+                       edgecolor=SURFACE, linewidth=0.8)
+    ax.axvline(0, color=MUTED, lw=1, zorder=1)
+    style(ax)
+    ax.xaxis.grid(True, color=GRID, lw=0.8)
+    ax.yaxis.grid(False)
+    ax.set_yticks(range(len(plangs)))
+    ax.set_yticklabels([PLANG_NAME[p] for p in reversed(plangs)], fontsize=10, color=INK)
+    ax.set_xlabel("change in requested smell produced against English, "
+                  "percentage points (95% interval)", fontsize=9.5, color=INK)
+    handles = [plt.Line2D([], [], marker="o", ls="", color=c, markersize=7,
+                          label=LANG_NAME[k]) for k, c in LANG_COLOUR.items()]
+    ax.legend(handles=handles, frameon=False, fontsize=9, ncol=3,
+              loc="lower left", bbox_to_anchor=(0, 1.0))
+    fig.tight_layout()
+    fig.savefig(out, dpi=200, facecolor=SURFACE)
+    plt.close(fig)
+    print(f"  wrote {out.name}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--analysis", default="_analysis_fullsize")
@@ -289,6 +341,8 @@ def main():
     x = Path(args.xlang)
     if (x / "by_plang_smell.csv").exists():
         fig4(read(x / "by_plang_smell.csv"), figdir / "fig4_smell_gap_by_language.png")
+    if (x / "effects.csv").exists():
+        fig5(read(x / "effects.csv"), figdir / "fig5_language_effect_by_plang.png")
 
 
 if __name__ == "__main__":
