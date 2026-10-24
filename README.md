@@ -2,19 +2,26 @@
 
 > ### 📊 [**Results: kaiyi03.github.io/code-smell-multilingual**](https://kaiyi03.github.io/code-smell-multilingual/)
 >
-> A fork of [rosawoo/code-smell](https://github.com/rosawoo/code-smell) extending the
-> multilingual experiment. All 8,136 existing generations have been scored with this
-> repository's own `detector/smell_detector.py`, which the analysis notebooks never
-> called, and with two controls the earlier analysis lacked — conditioning on syntax
-> validity, and restricting language comparisons to prompts generated in every
-> language. Figures and tables are on the results page above; aggregate CSVs are in
-> [`_analysis/`](_analysis/).
+> A fork of [rosawoo/code-smell](https://github.com/rosawoo/code-smell) that runs the
+> study at full size on Oxford's ARC cluster and extends it to three experiments:
 >
-> | | |
+> 1. **Prompt language.** The 426 Python tasks asked in English, Spanish, French and
+>    Chinese, of 13 models.
+> 2. **Programming language.** The English tasks ported to Java, C++ and C, asked of
+>    5 of those models.
+> 3. **Both at once.** The ported tasks translated into Spanish, French and Chinese,
+>    asked of the same 5 models.
+>
+> | Looking for | Where |
 > |---|---|
-> | Score existing outputs | `python -m pipeline.run_analysis --root <outputs> --lang en` |
-> | Rebuild figures | `python -m pipeline.make_figures` |
-> | Rebuild the results page | `python -m pipeline.make_site` |
+> | The findings | the [results page](https://kaiyi03.github.io/code-smell-multilingual/) |
+> | Scores, one row per generated file | [`_analysis_fullsize/`](_analysis_fullsize/) (experiment 1), [`_analysis_xlang/`](_analysis_xlang/) (experiments 2 and 3) |
+> | Every reported difference, with its 95% interval | `effects.csv` in both folders |
+> | The prompts: English, ported, and every translation | [`dataset/`](dataset/), [`dataset/translations/`](dataset/translations/) |
+> | Generated code and every untouched model reply | the data download on the [releases page](https://github.com/kaiyi03/code-smell-multilingual/releases) |
+> | Rebuild every score, figure and the page | `bash pipeline/rebuild_results.sh <generations>` |
+>
+> The sections below describe the original prompt dataset.
 
 A structured dataset of 400-500 prompts for code smell detection research, following methodology from [arXiv:2503.10666](https://arxiv.org/abs/2503.10666).
 
