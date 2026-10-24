@@ -228,7 +228,11 @@ def experiment2(xlang, root):
     overrides = json.loads((root / "dataset" / "prompt_overrides.json").read_text(encoding="utf-8"))
 
     grid = read(xlang / "by_plang_lang.csv") if (xlang / "by_plang_lang.csv").exists() else []
-    return {"all": [r for r in per_file if r["model"] in five],
+    # Levels over every prompt a language was asked, which is what the paired changes
+    # compare; the matched table (prompts asked in all four) gives Python's level on
+    # C's 292 prompts, the one C is compared with.
+    return {"all_prompts": {r["plang"]: r for r in read(xlang / "by_plang.csv")},
+            "all": [r for r in per_file if r["model"] in five],
             "matched": matched, "five": five, "per_model": per_model, "worst": worst,
             "runaway": runaway, "rest_range": rest_range, "others_bare": others_bare,
             "gaps": gaps, "ranked": ranked,
@@ -255,7 +259,7 @@ def build(analysis: Path, xlang: Path, docs: Path):
     e2 = experiment2(xlang, root)
     eff = Effects(analysis / "effects.csv", xlang / "effects.csv")
     mm = mixed(analysis / "mixed_model.csv", xlang / "mixed_model.csv")
-    m1, m2 = e1["matched"], e2["matched"]
+    m1, m2 = e1["matched"], e2["all_prompts"]
     has_grid = any(pl != "python" and l != "en" for pl, l in e2["grid"])
 
     # Only the figures the page shows are published; the others stay with the
@@ -716,6 +720,10 @@ def build(analysis: Path, xlang: Path, docs: Path):
   because {e2['n_class_smells']} smells are defined over classes; each comparison uses
   the prompts asked in both languages.</p>
   {plang_table}
+  <p>Each row is over every prompt that language was asked. C was asked {e2['n_c']}, and
+  on those same prompts Python produces the smell in
+  {num(e2['matched']['python'], 'induction_valid'):.1f}% of valid files, which is what the
+  C row is compared with.</p>
   <p class="callout">The C and C++ validity gap is one model. <code>{worst}</code> writes
   valid C++ {wv['cpp']['valid']:.0f}% and C {wv['c']['valid']:.0f}% of the time, against
   {wv['python']['valid']:.0f}% in Python. In {wv['cpp']['bare']:.0f}% of its C++ and

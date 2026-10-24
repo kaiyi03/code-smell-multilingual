@@ -107,7 +107,11 @@ a{color:var(--accent)}
   one dense model of 7 to 9 billion parameters from each of 5 families. C is asked 292 of the 426 prompts
   because 8 smells are defined over classes; each comparison uses
   the prompts asked in both languages.</p>
-  <div class="scroll"><table class=""><thead><tr><th>Programming language</th><th>Valid code</th><th>Smell produced</th><th>Change from Python</th><th>Mean length</th></tr></thead><tbody><tr><td>Python</td><td>98.1%</td><td>71.7%</td><td>—</td><td>29 lines</td></tr><tr><td>Java</td><td>97.5%</td><td>72.6%</td><td>+4.1 <span class="ci">−0.5 to +8.0</span></td><td>42 lines</td></tr><tr><td>C++</td><td>85.9%</td><td>73.7%</td><td>+2.2 <span class="ci">−2.5 to +6.7</span></td><td>80 lines</td></tr><tr><td>C</td><td>87.3%</td><td>74.0%</td><td>+2.3 <span class="ci">−2.8 to +7.9</span></td><td>87 lines</td></tr></tbody></table></div>
+  <div class="scroll"><table class=""><thead><tr><th>Programming language</th><th>Valid code</th><th>Smell produced</th><th>Change from Python</th><th>Mean length</th></tr></thead><tbody><tr><td>Python</td><td>98.5%</td><td>67.5%</td><td>—</td><td>29 lines</td></tr><tr><td>Java</td><td>98.0%</td><td>71.5%</td><td>+4.1 <span class="ci">−0.5 to +8.0</span></td><td>44 lines</td></tr><tr><td>C++</td><td>87.5%</td><td>69.7%</td><td>+2.2 <span class="ci">−2.5 to +6.7</span></td><td>77 lines</td></tr><tr><td>C</td><td>87.3%</td><td>74.0%</td><td>+2.3 <span class="ci">−2.8 to +7.9</span></td><td>87 lines</td></tr></tbody></table></div>
+  <p>Each row is over every prompt that language was asked. C was asked 292, and
+  on those same prompts Python produces the smell in
+  71.7% of valid files, which is what the
+  C row is compared with.</p>
   <p class="callout">The C and C++ validity gap is one model. <code>granite-8b-code</code> writes
   valid C++ 43% and C 43% of the time, against
   95% in Python. In 54% of its C++ and
