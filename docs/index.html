@@ -69,76 +69,87 @@ a{color:var(--accent)}
   <p class="stand">Do open-weight code models produce the code smell they are asked for,
   and does that depend on the language of the prompt or the programming language
   requested?</p>
-  <p class="meta">13 models, 22,152 files on prompt language ·
-  5 models, 5,720 new files on programming language ·
+  <p class="meta">13 models, 22,152 Python files in four prompt
+  languages · 5 models, 22,880 Java, C++ and C files in
+  4 prompt languages ·
   <a href="https://github.com/kaiyi03/code-smell-multilingual">source</a> · <a href="https://github.com/kaiyi03/code-smell-multilingual/releases">data download</a></p>
 </header>
 
 <section>
   <h2>Summary</h2>
-  <ol class="findings"><li><strong>Smell production falls from 54% in English to 44% in Chinese</strong>, the one prompt-language effect that survives every control.</li><li><strong>Both apparent validity effects belong to one model family.</strong> Spanish trails English (87.2% valid against 96.9%) because Granite leaves out the code fence in Spanish: accepting unfenced code takes <code>granite-8b-code</code> from 27% to 93%. C and C++ trail because <code>granite-8b-code</code> runs past the output limit.</li><li><strong>Code quality does not depend on the prompt language</strong> once broken files are set aside: 5.2 to 6.2 lint violations per 100 lines on parsing files in all four.</li><li><strong>The requested smell appears at the same rate in every programming language</strong> (72 to 74% of working files), but smell by smell the languages differ by up to 54 points, following each language's habits.</li></ol>
+  <ol class="findings"><li><strong>Asking in another language lowers smell production.</strong> Against English, the requested smell appears 5.8 points less often in Spanish, 6.8 points less often in French and 10.7 points less often in Chinese, in every one of the 13 models. Whether the code is valid barely changes (at most 1.6 points).</li><li><strong>In Chinese, part of the drop travels with translation damage.</strong> In the Python prompts, where machine translation changed a name the prompt asked for, smell production falls 16 points; where every name survived, 8. In the Java, C++ and C prompts the pattern is not consistent: clear in 1 of 9 combinations and reversed in 1.</li><li><strong>The programming language matters smell by smell, not on average.</strong> Overall, Java, C++ and C are at most 4.1 points from Python (Java +4.1, C++ +2.2 and C +2.3, every model leaning the same way); smell by smell they differ by up to 54 points, following each language's habits.</li><li><strong>The prompt-language effect holds in every programming language.</strong> Against English, smell production falls in 12 of the 12 combinations of prompt and programming language, every one beyond noise, with all 5 models agreeing in 11; Chinese costs most, 12.3 to 14.1 points in Java, C++ and C. It is a little larger than in Python for French in Java and Chinese in Java and C++, though only the mixed model puts that beyond noise.</li><li><strong>C and C++ produce less valid code because of one model, and only in English.</strong> <code>granite-8b-code</code> writes <code>#include</code> lines that name no header in 54% of its English C++ and 55% of its English C answers, and almost never when the prompt is in Spanish, French or Chinese; no other model does this at all.</li></ol>
 </section>
 
 <section>
   <h2>Experiment 1 · prompt language</h2>
   <p>The same 426 Python tasks asked in English, Spanish, French and Chinese,
-  of 13 models. Every model answered every prompt in every language.
-  Ranges are 95% intervals.</p>
-  <div class="scroll"><table class=""><thead><tr><th>Prompt language</th><th>Valid code</th><th>Smell produced</th><th>Lint per 100 lines, all files</th><th>Parsing files only</th></tr></thead><tbody><tr><td>English</td><td>96.9% <span class="ci">96–98</span></td><td>54.3% <span class="ci">51–58</span></td><td>7.3</td><td><strong>5.5</strong></td></tr><tr><td>Spanish</td><td>87.2% <span class="ci">86–88</span></td><td>49.0% <span class="ci">45–53</span></td><td>23.2</td><td><strong>5.2</strong></td></tr><tr><td>French</td><td>95.1% <span class="ci">94–96</span></td><td>47.5% <span class="ci">44–52</span></td><td>12.6</td><td><strong>6.0</strong></td></tr><tr><td>Chinese</td><td>97.0% <span class="ci">96–97</span></td><td>43.8% <span class="ci">40–48</span></td><td>9.6</td><td><strong>6.2</strong></td></tr></tbody></table></div>
-  <p class="callout">Files that fail to parse average
-  88 lint violations per 100 lines, against
-  5.7 for files that parse, so the all-files column mostly
-  measures how often generation broke. On parsing files the four languages are
-  level.</p>
-  <h3>Where the validity gap comes from</h3>
-  <p>The gap comes from 2 models; the other
-  11 are within 8 points of English in every
-  language. In Spanish, Granite writes the word <code>python</code> on its own line
-  instead of a fenced code block, and the extractor cannot separate the code from the
-  prose around it:</p>
-  <div class="scroll"><table class=""><thead><tr><th>Model</th><th>Prompt language</th><th>Valid as scored</th><th>Valid without requiring a fence</th><th>Replies with no fence</th></tr></thead><tbody><tr><td>granite-3b-code</td><td>Spanish</td><td>49.3%</td><td><strong>89.2%</strong></td><td>43%</td></tr><tr><td>granite-8b-code</td><td>Spanish</td><td>26.8%</td><td><strong>93.2%</strong></td><td>72%</td></tr><tr><td>granite-8b-code</td><td>French</td><td>80.3%</td><td><strong>93.4%</strong></td><td>15%</td></tr></tbody></table></div>
-  <p>The system prompt asks for code without Markdown formatting.
-  Of the 13 models, 12 ignore that and fence their code
-  anyway, which is what the extractor relies on; Granite in Spanish follows it but
-  adds explanation around the code. So the gap is the extractor's assumption rather
-  than a failure to follow the prompt. Scores here use the original extractor until
-  the full set is re-scored.</p>
+  of 13 models. Every model answered every prompt in every language. The
+  change from English is measured on the same prompts and models, with a 95% interval;
+  the last column counts the models whose own rate falls.</p>
+  <div class="scroll"><table class=""><thead><tr><th>Prompt language</th><th>Valid code</th><th>Smell produced</th><th>Change from English</th><th>Models that drop</th></tr></thead><tbody><tr><td>English</td><td>97.0%</td><td>54.3%</td><td>—</td><td>—</td></tr><tr><td>Spanish</td><td>95.4%</td><td>48.5%</td><td>−5.8 <span class="ci">−7.7 to −4.2</span></td><td>13 of 13</td></tr><tr><td>French</td><td>96.3%</td><td>47.5%</td><td>−6.8 <span class="ci">−8.7 to −5.0</span></td><td>13 of 13</td></tr><tr><td>Chinese</td><td>97.3%</td><td>43.6%</td><td>−10.7 <span class="ci">−13.1 to −8.4</span></td><td>13 of 13</td></tr></tbody></table></div>
+  <p>Restricted to the smells whose detectors discriminate well (a lift of at least 20, below), the changes are −5.8 in Spanish, −6.7 in French and −10.9 in Chinese, so the weak detectors are not what carries the effect.</p>
+  <p>Valid code barely depends on the prompt language. Where it dips, the model is mostly declining the task rather than writing broken code: 92 of the 5,538 Spanish replies are refusals (“Lo siento, pero no puedo ayudarte con eso”), against 4 in English, most of them from <code>deepseek-coder-6.7b</code>, <code>deepseek-coder-1.3b</code>, <code>qwen2.5-coder-3b</code> and <code>qwen2.5-coder-7b</code>.</p>
+  <p>Code quality does not depend on the prompt language: on files that parse,
+  5.1 to 6.3 lint violations per 100 lines in all
+  four. Files that fail to parse average 69 per 100 lines, which is
+  why quality is only measured on parsing files.</p>
+  <h3>How much of the drop is translation</h3>
+  <p>The prompts were machine-translated, and the translator is not told which words
+  are code, so it sometimes translates a name the prompt asks for
+  (<code>place_order</code> becomes <code>lugar_orden</code>).</p>
+  <div class="scroll"><table class=""><thead><tr><th>Prompt language</th><th>Names kept by the translator</th><th>Change where every name was kept</th><th>Change where a name was lost</th><th>Difference</th></tr></thead><tbody><tr><td>Spanish</td><td>84%</td><td>−4.9</td><td>−8.0</td><td>−3.2 <span class="ci">−7.7 to +1.3</span></td></tr><tr><td>French</td><td>83%</td><td>−7.3</td><td>−6.9</td><td>+0.4 <span class="ci">−4.1 to +4.8</span></td></tr><tr><td>Chinese</td><td>71%</td><td>−7.6</td><td>−16.2</td><td>−8.6 <span class="ci">−14.7 to −2.8</span></td></tr></tbody></table></div>
+  <p>In Chinese, prompts where the translator changed a name lose 16 points against 8 where every name survived, so part of the Chinese drop travels with damage to the prompt rather than with the language alone. In Spanish and French it makes no clear difference. The drop is there even on prompts that kept every name, so it is not only translation damage.</p>
 </section>
 
 <section>
   <h2>Experiment 2 · programming language</h2>
-  <p>The English prompts ported to Java, C++ and C, asked of 5 models,
-  one per family at 7B to 9B. C is asked 292 of the 426 prompts
-  because 8 smells are defined over classes; the table compares
-  prompts asked in all four languages.</p>
-  <div class="scroll"><table class=""><thead><tr><th>Programming language</th><th>Valid code</th><th>Smell produced</th><th>Mean length</th></tr></thead><tbody><tr><td>Python</td><td>97.7% <span class="ci">97–99</span></td><td>71.9% <span class="ci">66–77</span></td><td>31 lines</td></tr><tr><td>Java</td><td>96.5% <span class="ci">95–97</span></td><td>72.0% <span class="ci">67–77</span></td><td>42 lines</td></tr><tr><td>C++</td><td>85.1% <span class="ci">84–86</span></td><td>73.9% <span class="ci">69–79</span></td><td>81 lines</td></tr><tr><td>C</td><td>86.0% <span class="ci">85–88</span></td><td>73.9% <span class="ci">70–79</span></td><td>87 lines</td></tr></tbody></table></div>
-  <p class="callout">The C and C++ drop is one model. <code>granite-8b-code</code> writes valid C++
-  43% and C 43% of the time, against
-  95% in Python, and 61% of its broken
-  C++ and 84% of its broken C answers ran to the 2,048-token output
-  limit and were cut off mid-statement. The other four models
-  stay between 91.8 and 99.8% in every
-  language. Separately, <code>starcoder2-7b</code> never stops by itself and reaches the cap on every answer in every language, but its code comes first, so it still parses 92 to 98% of the time.</p>
+  <p>The English prompts ported to Java, C++ and C, asked of 5 models:
+  one dense model of 7 to 9 billion parameters from each of 5 families. C is asked 292 of the 426 prompts
+  because 8 smells are defined over classes; each comparison uses
+  the prompts asked in both languages.</p>
+  <div class="scroll"><table class=""><thead><tr><th>Programming language</th><th>Valid code</th><th>Smell produced</th><th>Change from Python</th><th>Mean length</th></tr></thead><tbody><tr><td>Python</td><td>98.1%</td><td>71.7%</td><td>—</td><td>29 lines</td></tr><tr><td>Java</td><td>97.5%</td><td>72.6%</td><td>+4.1 <span class="ci">−0.5 to +8.0</span></td><td>42 lines</td></tr><tr><td>C++</td><td>85.9%</td><td>73.7%</td><td>+2.2 <span class="ci">−2.5 to +6.7</span></td><td>80 lines</td></tr><tr><td>C</td><td>87.3%</td><td>74.0%</td><td>+2.3 <span class="ci">−2.8 to +7.9</span></td><td>87 lines</td></tr></tbody></table></div>
+  <p class="callout">The C and C++ validity gap is one model. <code>granite-8b-code</code> writes
+  valid C++ 43% and C 43% of the time, against
+  95% in Python. In 54% of its C++ and
+  55% of its C answers it writes <code>#include</code> lines that name no
+  header, which no compiler accepts, and in 35% and
+  47% it repeats that line until the output limit. The other 4 models stay between
+  96.9 and 99.8% in every
+  language. Separately, <code>starcoder2-7b</code> never stops by itself and reaches the output limit on every answer in every language, but its answer comes first, so 98 to 99% of its files still parse.</p>
   <h3>Smells follow each language's habits</h3>
-  <p>The flat average hides large differences smell by smell, and the direction is
+  <p>The average hides large differences smell by smell, and the direction is
   consistent: a smell is easier to produce where it is the ordinary way to write that
   language.</p>
   <figure>
     <img src="figures/fig4_smell_gap_by_language.png" alt="Share of working files containing each requested smell, by programming language, sorted by the gap between languages">
     <figcaption>Working files only, English prompts, the same 5 models in
-    every language. Each point rests on 62 to 100 files, so
+    every language. Each point rests on 64 to 100 files, so
     gaps under about 20 points are within noise.</figcaption>
   </figure>
-  <ul><li><strong>Data Class</strong> (Java 96.2%, Python 42.5%). A class of private fields with getters and setters is how Java ordinarily stores data, so a model writes a textbook example; Python has several competing conventions, so fewer answers match the definition.</li><li><strong>Global State</strong> (C 97.4%, Java 69.2%). A variable at file level is ordinary C, while Java makes the model reach deliberately for a <code>static</code> field.</li><li><strong>Long Parameter List</strong> (Python 100.0%, C 72.5%). C and C++ programmers usually pass a struct rather than many separate arguments.</li></ul>
+  <ul><li><strong>Data Class</strong> (Java 96.2%, Python 42.5%). A class of private fields with getters and setters is how Java ordinarily stores data, so a model writes a textbook example; Python has several competing conventions, so fewer answers match the definition.</li><li><strong>Long Parameter List</strong> (Python 100.0%, C 73.8%). C and C++ programmers usually pass a struct rather than many separate arguments.</li><li><strong>Global State</strong> (C 97.4%, Java 71.8%). A variable at file level is ordinary C, while Java makes the model reach deliberately for a <code>static</code> field.</li></ul>
 </section>
 
+<section>
+  <h2>Experiment 3 · both languages at once</h2>
+  <p>The Java, C++ and C prompts translated into Spanish, French and Chinese the same
+  way as the Python ones, and asked of the same 5 models, so every
+  prompt language meets every programming language.</p>
+  <figure>
+    <img src="figures/fig5_language_effect_by_plang.png" alt="Change in smell production against English for each prompt language, within each programming language, with 95% intervals">
+    <figcaption>Change in the share of working files containing the requested smell,
+    against English, on the same prompts and models. Lines are 95% intervals.</figcaption>
+  </figure>
+  <p>Compared with Python, the French drop in Java and the Chinese drop in Java and C++ are a little larger, by 2.6 to 4.2 points; the paired intervals include zero, and only the mixed model, which assumes one effect for every prompt and so gives narrower intervals, puts them beyond noise. Every other difference from Python is within noise.</p>
+  <div class="scroll"><table class=""><thead><tr><th>Smell produced</th><th>English</th><th>Spanish</th><th>French</th><th>Chinese</th></tr></thead><tbody><tr><td>Python</td><td>67.5%</td><td>61.8%</td><td>61.9%</td><td>57.6%</td></tr><tr><td>Java</td><td>71.5%</td><td>65.2%</td><td>63.3%</td><td>57.5%</td></tr><tr><td>C++</td><td>69.7%</td><td>63.2%</td><td>65.4%</td><td>55.8%</td></tr><tr><td>C</td><td>74.0%</td><td>66.5%</td><td>68.0%</td><td>61.7%</td></tr></tbody></table></div>
+  <p>Valid code moves with the prompt language only through habits of single models. <code>granite-8b-code</code> writes headerless <code>#include</code> lines in 55% of its English C and C++ answers and in at most 0.1% in the other languages, so its C and C++ validity rises from 43% in English to 91 to 93% elsewhere. In the other direction, <code>deepseek-coder-6.7b</code> declines 155 of its 1,144 Spanish Java, C++ and C prompts (14%) and almost none in English.</p>
+</section>
 <section>
   <h2>Which smells models produce on request</h2>
   <p>Experiment 1, Python, 21 of 25 smells measured. Beside each rate is how often
   the same detector fires on files that asked for a different smell; the gap between
-  them, the lift, is what the prompt caused. Data Clumps, Inappropriate Intimacy, Dead Code and Speculative Generality have a lift under
-  20 and are reported, not relied on.</p>
-  <div class="scroll"><table class=""><thead><tr><th>Targeted smell</th><th>Files</th><th>Asked for</th><th>Not asked for</th><th>Lift</th></tr></thead><tbody><tr><td>Long Parameter List</td><td>1,040</td><td>99.8%</td><td>27.8%</td><td><span class="good">+72</span></td></tr><tr><td>Middle Man</td><td>832</td><td>72.0%</td><td>2.9%</td><td><span class="good">+69</span></td></tr><tr><td>Magic Numbers</td><td>936</td><td>96.9%</td><td>28.8%</td><td><span class="good">+68</span></td></tr><tr><td>Switch Statements</td><td>936</td><td>56.1%</td><td>2.3%</td><td><span class="good">+54</span></td></tr><tr><td>Data Class</td><td>832</td><td>60.0%</td><td>16.0%</td><td><span class="good">+44</span></td></tr><tr><td>Global State</td><td>832</td><td>70.3%</td><td>26.6%</td><td><span class="good">+44</span></td></tr><tr><td>Duplicated Code</td><td>1,040</td><td>98.0%</td><td>55.5%</td><td><span class="good">+43</span></td></tr><tr><td>Message Chains</td><td>832</td><td>44.1%</td><td>3.4%</td><td><span class="good">+41</span></td></tr><tr><td>Refused Bequest</td><td>832</td><td>41.0%</td><td>1.2%</td><td><span class="good">+40</span></td></tr><tr><td>Long Method</td><td>1,040</td><td>63.3%</td><td>24.6%</td><td><span class="good">+39</span></td></tr><tr><td>Parallel Inheritance Hierarchies</td><td>832</td><td>37.0%</td><td>0.1%</td><td><span class="good">+37</span></td></tr><tr><td>Deep Nesting</td><td>936</td><td>37.7%</td><td>3.7%</td><td><span class="good">+34</span></td></tr><tr><td>Lazy Class</td><td>832</td><td>48.8%</td><td>18.2%</td><td><span class="good">+31</span></td></tr><tr><td>God Class</td><td>1,040</td><td>31.6%</td><td>3.4%</td><td><span class="good">+28</span></td></tr><tr><td>Feature Envy</td><td>936</td><td>29.4%</td><td>3.9%</td><td><span class="good">+25</span></td></tr><tr><td>Comments</td><td>728</td><td>30.7%</td><td>8.9%</td><td><span class="good">+22</span></td></tr><tr><td>Temporary Field</td><td>832</td><td>25.0%</td><td>3.2%</td><td><span class="good">+22</span></td></tr><tr><td>Data Clumps <span class="flag">weak</span></td><td>936</td><td>21.6%</td><td>5.5%</td><td><span class="flag">+16</span></td></tr><tr><td>Inappropriate Intimacy <span class="flag">weak</span></td><td>936</td><td>8.5%</td><td>0.1%</td><td><span class="flag">+8</span></td></tr><tr><td>Dead Code <span class="flag">weak</span></td><td>832</td><td>19.9%</td><td>12.6%</td><td><span class="flag">+7</span></td></tr><tr><td>Speculative Generality <span class="flag">weak</span></td><td>832</td><td>7.6%</td><td>7.3%</td><td><span class="flag">+0</span></td></tr></tbody></table></div>
+  them, the lift, is what the prompt caused. Data Clumps, Dead Code, Inappropriate Intimacy and Speculative Generality have
+  a lift under 20 and are reported, not relied on.</p>
+  <div class="scroll"><table class=""><thead><tr><th>Targeted smell</th><th>Files</th><th>Asked for</th><th>Not asked for</th><th>Lift</th></tr></thead><tbody><tr><td>Long Parameter List</td><td>1,040</td><td>99.8%</td><td>27.7%</td><td><span class="good">+72</span></td></tr><tr><td>Magic Numbers</td><td>936</td><td>96.0%</td><td>26.0%</td><td><span class="good">+70</span></td></tr><tr><td>Middle Man</td><td>832</td><td>72.0%</td><td>2.9%</td><td><span class="good">+69</span></td></tr><tr><td>Switch Statements</td><td>936</td><td>56.2%</td><td>2.3%</td><td><span class="good">+54</span></td></tr><tr><td>Global State</td><td>832</td><td>69.1%</td><td>20.9%</td><td><span class="good">+48</span></td></tr><tr><td>Data Class</td><td>832</td><td>59.5%</td><td>15.9%</td><td><span class="good">+44</span></td></tr><tr><td>Duplicated Code</td><td>1,040</td><td>97.9%</td><td>54.8%</td><td><span class="good">+43</span></td></tr><tr><td>Message Chains</td><td>832</td><td>43.5%</td><td>3.3%</td><td><span class="good">+40</span></td></tr><tr><td>Long Method</td><td>1,040</td><td>62.8%</td><td>22.9%</td><td><span class="good">+40</span></td></tr><tr><td>Refused Bequest</td><td>832</td><td>40.3%</td><td>1.3%</td><td><span class="good">+39</span></td></tr><tr><td>Parallel Inheritance Hierarchies</td><td>832</td><td>37.3%</td><td>0.1%</td><td><span class="good">+37</span></td></tr><tr><td>Deep Nesting</td><td>936</td><td>38.0%</td><td>3.6%</td><td><span class="good">+34</span></td></tr><tr><td>Lazy Class</td><td>832</td><td>48.7%</td><td>17.9%</td><td><span class="good">+31</span></td></tr><tr><td>God Class</td><td>1,040</td><td>31.9%</td><td>3.5%</td><td><span class="good">+28</span></td></tr><tr><td>Feature Envy</td><td>936</td><td>28.6%</td><td>3.8%</td><td><span class="good">+25</span></td></tr><tr><td>Comments</td><td>728</td><td>30.0%</td><td>8.7%</td><td><span class="good">+21</span></td></tr><tr><td>Temporary Field</td><td>832</td><td>24.4%</td><td>3.2%</td><td><span class="good">+21</span></td></tr><tr><td>Data Clumps <span class="flag">weak</span></td><td>936</td><td>21.5%</td><td>5.0%</td><td><span class="flag">+16</span></td></tr><tr><td>Dead Code <span class="flag">weak</span></td><td>832</td><td>20.6%</td><td>12.5%</td><td><span class="flag">+8</span></td></tr><tr><td>Inappropriate Intimacy <span class="flag">weak</span></td><td>936</td><td>8.0%</td><td>0.0%</td><td><span class="flag">+8</span></td></tr><tr><td>Speculative Generality <span class="flag">weak</span></td><td>832</td><td>8.5%</td><td>7.2%</td><td><span class="flag">+1</span></td></tr></tbody></table></div>
 </section>
 
 <section>
@@ -151,19 +162,28 @@ a{color:var(--accent)}
     <li><strong>Prompts.</strong> Spanish, French and Chinese by NLLB-200 machine
     translation, with system prompts translated by hand. Java, C++ and C ported rather
     than translated, since "write a Python function" has to become "write a Java
-    method"; 23 prompts were rewritten by hand.</li>
+    method"; 23 prompts were rewritten by hand. The ported prompts were then
+    translated exactly as the Python ones were.</li>
+    <li><strong>Extracting the code.</strong> The answer is the first fenced code block
+    in the requested language. A reply with no fence is taken whole if it parses;
+    otherwise the code is recovered from between the prose. The system prompt asks for
+    no Markdown, yet 12 of the 13 models fence their English code
+    anyway. Against the first version of the extractor, which joined every block and
+    required a fence, smell production moves by at most 1.0 points in any
+    language; validity moves by 5 points or more in 16 model-and-language cells, belonging to <code>granite-3b-code</code>, <code>granite-8b-code</code> and <code>starcoder2-7b</code> (<code>extraction_check.csv</code> lists them).</li>
     <li><strong>Detectors.</strong> Experiment 1 uses the Python detector, 21 of 25
-    smells, built on Python's own parser. Experiment 2 uses one tree-sitter detector for
-    all four languages, 12 of 25 smells, so each smell has a single
-    definition; Python is re-scored with it so the four columns share an instrument.</li>
-    <li><strong>Uncertainty.</strong> Intervals come from resampling whole prompts 500
-    times, because one prompt's files rise and fall together.</li>
-    <li><strong>Excluded.</strong> <code>mamba-codestral-7b</code> substitutes a wrong token about once
-    in every 140 and only 6 of 20 files parse. Five causes were tested: two were
-    pipeline faults and were fixed, three were ruled out, leaving the published model
-    itself. The release notes record what was tested.</li>
+    smells, built on Python's own parser. Experiments 2 and 3 use one tree-sitter
+    detector for all four languages, 12 of 25 smells, so each smell has a
+    single definition; Python is re-scored with it so the columns share an
+    instrument.</li>
+    <li><strong>Uncertainty.</strong> Each difference is recomputed in 1,000 resamples
+    of whole prompts, because one prompt's files rise and fall together. As a check, a logistic mixed-effects model with crossed random intercepts for prompt and model (<code>mixed_model.csv</code>) agrees on the direction of every effect; its odds ratios against English are 0.65 in Spanish, 0.60 in French and 0.45 in Chinese. Because it assumes one effect for every prompt, its intervals are narrower: it puts Java and C above Python, which the resampling does not.</li>
+    <li><strong>Excluded.</strong> <code>mamba-codestral-7b</code> substitutes a wrong
+    token about once in every 140 and only 6 of 20 files parse. Five causes were tested:
+    two were pipeline faults and were fixed, three were ruled out, leaving the published
+    model itself. The release notes record what was tested.</li>
   </ul>
-  <div class="scroll"><table class="wrap-cells"><thead><tr><th>Control</th><th>What it does</th><th>Why</th></tr></thead><tbody><tr><td>Validity</td><td>Quality and smell figures use parsing files only</td><td>A file that does not parse has no quality to measure</td></tr><tr><td>Matched prompts</td><td>Languages are compared on prompts asked in all of them</td><td>C is asked 292 of the 426 prompts</td></tr><tr><td>Lift</td><td>Each detector is also run on files that asked for another smell</td><td>A detector that fires everywhere reports a base rate; under 20 is weak</td></tr></tbody></table></div>
+  <div class="scroll"><table class="wrap-cells"><thead><tr><th>Control</th><th>What it does</th><th>Why</th></tr></thead><tbody><tr><td>Validity</td><td>Smell and quality figures use parsing files only</td><td>A file that does not parse has no smell to find</td></tr><tr><td>Matched prompts</td><td>Every comparison uses prompts asked in all the cells it compares</td><td>C is asked 292 of the 426 prompts</td></tr><tr><td>Paired differences</td><td>Each difference is recomputed inside every resample of prompts</td><td>The same prompts sit in both rates, so their errors move together</td></tr><tr><td>Lift</td><td>Each detector is also run on files that asked for another smell</td><td>A detector that fires everywhere reports a base rate; under 20 is weak</td></tr></tbody></table></div>
   <details>
     <summary>The 13 smells the cross-language detector does not measure, and why</summary>
     <div class="scroll"><table class="wrap-cells"><thead><tr><th>Smell</th><th>Why it is out of reach</th></tr></thead><tbody><tr><td>Alternative Classes with Different Interfaces</td><td>needs semantic equivalence</td></tr><tr><td>Data Clumps</td><td>needs parameter identity matched across signatures and types</td></tr><tr><td>Dead Code</td><td>fires as often on code that was not asked for it; see git history</td></tr><tr><td>Feature Envy</td><td>needs to resolve which object each field access belongs to</td></tr><tr><td>Inappropriate Intimacy</td><td>needs per-class field ownership across two classes</td></tr><tr><td>Incomplete Library Class</td><td>needs the library's intent</td></tr><tr><td>Middle Man</td><td>needs to tell a delegating call from a working one</td></tr><tr><td>Parallel Inheritance Hierarchies</td><td>needs two hierarchies compared by name</td></tr><tr><td>Primitive Obsession</td><td>a judgement about domain modelling, not a count</td></tr><tr><td>Refused Bequest</td><td>needs the parent's members, usually in another file</td></tr><tr><td>Shotgun Surgery</td><td>needs change history, not a syntax tree</td></tr><tr><td>Speculative Generality</td><td>needs to know an abstraction has one user</td></tr><tr><td>Temporary Field</td><td>needs to know a field is unset on most paths</td></tr></tbody></table></div>
@@ -173,14 +193,15 @@ a{color:var(--accent)}
 <section>
   <h2>Data and code</h2>
   <ul>
-    <li><a href="https://github.com/kaiyi03/code-smell-multilingual">Repository</a>: detectors, pipeline, and the ported prompt sets
-    in <code>dataset/</code>.</li>
+    <li><a href="https://github.com/kaiyi03/code-smell-multilingual">Repository</a>: detectors, pipeline, the ported prompt sets in
+    <code>dataset/</code> and every translation in <code>dataset/translations/</code>.</li>
     <li>Scores: <a href="https://github.com/kaiyi03/code-smell-multilingual/tree/main/_analysis_fullsize"><code>_analysis_fullsize/</code></a>
     (Experiment 1) and <a href="https://github.com/kaiyi03/code-smell-multilingual/tree/main/_analysis_xlang"><code>_analysis_xlang/</code></a>
-    (Experiment 2), one row per file in <code>per_file.csv</code>.</li>
+    (Experiments 2 and 3), one row per file in <code>per_file.csv</code>, every reported
+    difference in <code>effects.csv</code>.</li>
     <li><a href="https://github.com/kaiyi03/code-smell-multilingual/releases">Data download</a>: every generated file and every
     model's untouched reply.</li>
-    <li>Rebuild this page: <code>python -m pipeline.make_site</code>.</li>
+    <li>Rebuild everything: <code>bash pipeline/rebuild_results.sh</code>.</li>
   </ul>
 </section>
 </div></body></html>

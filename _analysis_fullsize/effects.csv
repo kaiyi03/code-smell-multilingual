@@ -1,0 +1,13 @@
+experiment,within,contrast,metric,estimate,ci_lo,ci_hi,n_prompts,n_models,models_same_direction
+prompt language,python,es - en,validity,-1.61,-2.33,-0.9,426,13,9
+prompt language,python,es - en,induction,-5.75,-7.7,-4.2,426,13,13
+prompt language,python,fr - en,validity,-0.67,-1.35,0.05,426,13,7
+prompt language,python,fr - en,induction,-6.79,-8.7,-5.02,426,13,13
+prompt language,python,zh - en,validity,0.36,-0.31,1.05,426,13,7
+prompt language,python,zh - en,induction,-10.69,-13.09,-8.37,426,13,13
+prompt language,"python, strong detectors",es - en,validity,-1.36,-2.2,-0.55,294,13,7
+prompt language,"python, strong detectors",es - en,induction,-5.83,-7.52,-3.97,294,13,12
+prompt language,"python, strong detectors",fr - en,validity,-0.97,-1.7,-0.24,294,13,8
+prompt language,"python, strong detectors",fr - en,induction,-6.71,-8.96,-4.79,294,13,13
+prompt language,"python, strong detectors",zh - en,validity,-0.26,-0.92,0.42,294,13,6
+prompt language,"python, strong detectors",zh - en,induction,-10.92,-13.66,-8.07,294,13,13

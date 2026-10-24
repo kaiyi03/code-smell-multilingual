@@ -1,0 +1,6 @@
+experiment,term,n_files,log_odds,sd,odds_ratio,or_lo,or_hi
+prompt language,"C(lang, Treatment('en'))[T.es]",18186,-0.4283,0.0405,0.652,0.602,0.705
+prompt language,"C(lang, Treatment('en'))[T.fr]",18186,-0.5053,0.0404,0.603,0.557,0.653
+prompt language,"C(lang, Treatment('en'))[T.zh]",18186,-0.7961,0.041,0.451,0.416,0.489
+prompt language,sd of random intercept: prompt,18186,,2.6161,,,
+prompt language,sd of random intercept: model,18186,,0.3455,,,

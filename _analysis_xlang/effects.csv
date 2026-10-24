@@ -1,0 +1,49 @@
+experiment,within,contrast,metric,estimate,ci_lo,ci_hi,n_prompts,n_models,models_same_direction
+programming language,en,java - python,validity,-0.47,-1.22,0.28,426,5,2
+programming language,en,java - python,induction,4.09,-0.47,8.04,426,5,5
+programming language,en,cpp - python,validity,-11.03,-12.16,-9.86,426,5,4
+programming language,en,cpp - python,induction,2.24,-2.5,6.71,426,5,5
+programming language,en,c - python,validity,-10.82,-12.4,-9.38,292,5,3
+programming language,en,c - python,induction,2.31,-2.78,7.93,292,5,5
+both,python,es - en,validity,-2.63,-3.71,-1.64,426,5,4
+both,python,es - en,induction,-5.71,-8.67,-2.57,426,5,4
+both,python,fr - en,validity,0.05,-0.66,0.8,426,5,3
+both,python,fr - en,induction,-5.58,-8.99,-2.32,426,5,5
+both,python,zh - en,validity,-0.14,-1.03,0.7,426,5,1
+both,python,zh - en,induction,-9.87,-13.39,-6.12,426,5,5
+both,java,es - en,validity,-3.38,-4.51,-2.3,426,5,4
+both,java,es - en,induction,-6.35,-9.68,-3.47,426,5,5
+both,java,fr - en,validity,-1.55,-2.39,-0.75,426,5,3
+both,java,fr - en,induction,-8.23,-11.48,-5.27,426,5,5
+both,java,zh - en,validity,-0.42,-1.27,0.38,426,5,1
+both,java,zh - en,induction,-14.08,-17.95,-10.64,426,5,5
+both,cpp,es - en,validity,7.0,5.68,8.26,426,5,1
+both,cpp,es - en,induction,-6.48,-9.82,-3.14,426,5,5
+both,cpp,fr - en,validity,9.15,8.03,10.28,426,5,1
+both,cpp,fr - en,induction,-4.35,-7.74,-1.01,426,5,5
+both,cpp,zh - en,validity,9.15,8.03,10.42,426,5,3
+both,cpp,zh - en,induction,-13.86,-18.09,-9.63,426,5,5
+both,c,es - en,validity,5.14,3.29,7.05,292,5,1
+both,c,es - en,induction,-7.46,-11.76,-3.43,292,5,5
+both,c,fr - en,validity,8.97,7.33,10.55,292,5,2
+both,c,fr - en,induction,-6.02,-10.03,-1.99,292,5,5
+both,c,zh - en,validity,7.19,5.61,8.9,292,5,1
+both,c,zh - en,induction,-12.28,-17.18,-7.68,292,5,5
+both,java vs python,(es - en) difference,validity,-0.75,-1.97,0.42,426,5,3
+both,java vs python,(es - en) difference,induction,-0.64,-4.85,3.68,426,5,3
+both,java vs python,(fr - en) difference,validity,-1.6,-2.58,-0.61,426,5,5
+both,java vs python,(fr - en) difference,induction,-2.65,-6.54,1.55,426,5,3
+both,java vs python,(zh - en) difference,validity,-0.28,-1.22,0.7,426,5,2
+both,java vs python,(zh - en) difference,induction,-4.21,-8.48,0.09,426,5,5
+both,cpp vs python,(es - en) difference,validity,9.62,8.17,11.13,426,5,3
+both,cpp vs python,(es - en) difference,induction,-0.76,-5.06,3.49,426,5,3
+both,cpp vs python,(fr - en) difference,validity,9.11,7.79,10.52,426,5,1
+both,cpp vs python,(fr - en) difference,induction,1.23,-2.72,5.49,426,5,2
+both,cpp vs python,(zh - en) difference,validity,9.3,7.93,10.66,426,5,3
+both,cpp vs python,(zh - en) difference,induction,-4.0,-8.51,0.41,426,5,5
+both,c vs python,(es - en) difference,validity,8.63,6.57,10.69,292,5,2
+both,c vs python,(es - en) difference,induction,-1.04,-5.49,3.24,292,5,2
+both,c vs python,(fr - en) difference,validity,8.7,6.92,10.55,292,5,2
+both,c vs python,(fr - en) difference,induction,1.93,-2.84,6.53,292,5,3
+both,c vs python,(zh - en) difference,validity,7.53,5.68,9.59,292,5,1
+both,c vs python,(zh - en) difference,induction,-0.52,-5.72,5.05,292,5,3

@@ -1,0 +1,23 @@
+experiment,term,n_files,log_odds,sd,odds_ratio,or_lo,or_hi
+programming language,"C(plang, Treatment('python'))[T.c]",3688,0.2256,0.1036,1.253,1.023,1.535
+programming language,"C(plang, Treatment('python'))[T.cpp]",3688,0.1421,0.0891,1.153,0.968,1.373
+programming language,"C(plang, Treatment('python'))[T.java]",3688,0.3,0.0847,1.35,1.143,1.594
+programming language,sd of random intercept: prompt,3688,,1.8286,,,
+programming language,sd of random intercept: model,3688,,0.2237,,,
+both,"C(lang, Treatment('en'))[T.es]",15114,-0.3657,0.0419,0.694,0.639,0.753
+both,"C(lang, Treatment('en'))[T.fr]",15114,-0.3629,0.0413,0.696,0.642,0.754
+both,"C(lang, Treatment('en'))[T.zh]",15114,-0.6525,0.0404,0.521,0.481,0.564
+both,"C(plang, Treatment('python'))[T.c]",15114,0.3116,0.0468,1.366,1.246,1.497
+both,"C(plang, Treatment('python'))[T.cpp]",15114,0.1494,0.0411,1.161,1.071,1.259
+both,"C(plang, Treatment('python'))[T.java]",15114,0.2951,0.0405,1.343,1.241,1.454
+both,"C(lang, Treatment('en'))[T.es]:C(plang, Treatment('python'))[T.c]",15114,-0.1124,0.0928,0.894,0.745,1.072
+both,"C(lang, Treatment('en'))[T.fr]:C(plang, Treatment('python'))[T.c]",15114,-0.0099,0.0918,0.99,0.827,1.185
+both,"C(lang, Treatment('en'))[T.zh]:C(plang, Treatment('python'))[T.c]",15114,-0.1384,0.0898,0.871,0.73,1.038
+both,"C(lang, Treatment('en'))[T.es]:C(plang, Treatment('python'))[T.cpp]",15114,-0.0737,0.0818,0.929,0.791,1.091
+both,"C(lang, Treatment('en'))[T.fr]:C(plang, Treatment('python'))[T.cpp]",15114,0.0932,0.0811,1.098,0.936,1.287
+both,"C(lang, Treatment('en'))[T.zh]:C(plang, Treatment('python'))[T.cpp]",15114,-0.2416,0.0786,0.785,0.673,0.916
+both,"C(lang, Treatment('en'))[T.es]:C(plang, Treatment('python'))[T.java]",15114,-0.083,0.0821,0.92,0.784,1.081
+both,"C(lang, Treatment('en'))[T.fr]:C(plang, Treatment('python'))[T.java]",15114,-0.1971,0.0803,0.821,0.702,0.961
+both,"C(lang, Treatment('en'))[T.zh]:C(plang, Treatment('python'))[T.java]",15114,-0.2836,0.0784,0.753,0.646,0.878
+both,sd of random intercept: prompt,15114,,1.8572,,,
+both,sd of random intercept: model,15114,,0.2264,,,

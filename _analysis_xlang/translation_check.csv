@@ -1,0 +1,16 @@
+scores,plang,lang,identifiers_retained_pct,prompts_kept_all,prompts_lost_some,drop_kept_all,drop_lost_some,difference,ci_lo,ci_hi
+prompt language (13 models),python,es,83.8,203,81,-4.86,-8.01,-3.16,-7.68,1.31
+prompt language (13 models),python,fr,82.8,199,85,-7.3,-6.92,0.38,-4.08,4.79
+prompt language (13 models),python,zh,70.8,146,138,-7.57,-16.18,-8.61,-14.7,-2.79
+both languages (5 models),python,es,83.8,203,81,-1.63,-4.82,-3.19,-12.43,7.45
+both languages (5 models),python,fr,82.8,199,85,-4.3,0.86,5.17,-2.8,12.65
+both languages (5 models),python,zh,70.8,146,138,-2.35,-13.98,-11.63,-21.73,-1.87
+both languages (5 models),java,es,63.1,142,143,-1.38,-8.41,-7.03,-14.62,0.89
+both languages (5 models),java,fr,67.4,135,150,0.8,-10.44,-11.24,-19.06,-4.73
+both languages (5 models),java,zh,48.5,81,204,-19.1,-10.51,8.59,-0.96,17.97
+both languages (5 models),cpp,es,85.5,213,70,-3.14,-8.8,-5.66,-16.8,4.58
+both languages (5 models),cpp,fr,83.5,197,86,-3.98,-7.12,-3.14,-12.77,6.79
+both languages (5 models),cpp,zh,66.8,129,154,-12.41,-16.77,-4.36,-16.51,7.41
+both languages (5 models),c,es,81.7,120,53,-1.64,-4.3,-2.66,-15.48,11.22
+both languages (5 models),c,fr,77.9,115,58,-1.38,-5.23,-3.86,-14.54,6.68
+both languages (5 models),c,zh,68.9,94,79,-5.68,-20.06,-14.38,-30.2,3.33
