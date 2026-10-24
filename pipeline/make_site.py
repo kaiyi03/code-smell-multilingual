@@ -107,6 +107,17 @@ def mixed(*paths):
     return out
 
 
+def refusals_by(rows, lang, plangs=None):
+    """(refusals, replies, models with at least 5) for one prompt language."""
+    g = [r for r in rows if r["lang"] == lang and (plangs is None or r["plang"] in plangs)]
+    k = sum(int(r["refusals"]) for r in g)
+    n = sum(int(r["n"]) for r in g)
+    per = defaultdict(int)
+    for r in g:
+        per[r["model"]] += int(r["refusals"])
+    return k, n, sorted((m for m, v in per.items() if v >= 5), key=lambda m: -per[m])
+
+
 class Effects:
     """The contrasts from pipeline/effects.py, keyed as they are written."""
 
@@ -157,7 +168,9 @@ def experiment1(analysis):
             "n_models": len(models), "n_files": len(per_file),
             "by_smell": read(analysis / "by_smell.csv"),
             "extraction": read(analysis / "extraction_check.csv")
-            if (analysis / "extraction_check.csv").exists() else []}
+            if (analysis / "extraction_check.csv").exists() else [],
+            "refusals": read(analysis / "refusal_check.csv")
+            if (analysis / "refusal_check.csv").exists() else []}
 
 
 def experiment2(xlang, root):
@@ -215,7 +228,8 @@ def experiment2(xlang, root):
     overrides = json.loads((root / "dataset" / "prompt_overrides.json").read_text(encoding="utf-8"))
 
     grid = read(xlang / "by_plang_lang.csv") if (xlang / "by_plang_lang.csv").exists() else []
-    return {"matched": matched, "five": five, "per_model": per_model, "worst": worst,
+    return {"all": [r for r in per_file if r["model"] in five],
+            "matched": matched, "five": five, "per_model": per_model, "worst": worst,
             "runaway": runaway, "rest_range": rest_range, "others_bare": others_bare,
             "gaps": gaps, "ranked": ranked,
             "n_dot": (min(n_dot), max(n_dot)) if n_dot else (0, 0),
@@ -228,7 +242,9 @@ def experiment2(xlang, root):
             "translation": read(xlang / "translation_check.csv")
             if (xlang / "translation_check.csv").exists() else [],
             "extraction": read(xlang / "extraction_check.csv")
-            if (xlang / "extraction_check.csv").exists() else []}
+            if (xlang / "extraction_check.csv").exists() else [],
+            "refusals": read(xlang / "refusal_check.csv")
+            if (xlang / "refusal_check.csv").exists() else []}
 
 
 # ---------------------------------------------------------------------- page
@@ -271,6 +287,20 @@ def build(analysis: Path, xlang: Path, docs: Path):
     every_model = all(d and d["same"] == d["n"] for d in d1.values())
     vmax = max(abs(v["est"]) for v in v1.values() if v)
     lint_valid = [num(m1[l], "ruff_per_100loc_valid") for l in ORDER]
+    refusal1_txt = ""
+    if e1["refusals"]:
+        worst_l = max(ORDER[1:], key=lambda l: refusals_by(e1["refusals"], l)[0])
+        k, n, who = refusals_by(e1["refusals"], worst_l)
+        k_en = refusals_by(e1["refusals"], "en")[0]
+        if k:
+            refusal1_txt = (
+                f"<p>Valid code barely depends on the prompt language. Where it dips, the "
+                f"model is mostly declining the task rather than writing broken code: {k} of "
+                f"the {n:,} {LANG[worst_l]} replies are refusals"
+                + (" (“Lo siento, pero no puedo ayudarte con eso”)" if worst_l == "es" else "")
+                + f", against {k_en} in English"
+                + (f", most of them from {plain_list(f'<code>{m}</code>' for m in who)}" if who else "")
+                + ".</p>")
 
     rows1 = []
     for l in ORDER:
@@ -368,24 +398,112 @@ def build(analysis: Path, xlang: Path, docs: Path):
     found3 = [d for d in d3.values() if d]
     n_down = sum(1 for d in found3 if d["est"] < 0)
     n_down_clear = sum(1 for d in found3 if d["est"] < 0 and clear(d))
-    inter_clear = [(k, v) for k, v in inter.items() if clear(v)]
-    if inter and not inter_clear:
+    n_all_agree = sum(1 for d in found3 if d["est"] < 0 and d["same"] == d["n"])
+    zh_other = [d3[(p, "zh")]["est"] for p in PORDER[1:] if d3.get((p, "zh"))]
+    # Say Chinese costs most only where it does, in every programming language.
+    zh_most = bool(zh_other) and all(
+        d3[(p, "zh")]["est"] <= min(d3[(p, l)]["est"] for l in ("es", "fr") if d3.get((p, l)))
+        for p in PORDER[1:] if d3.get((p, "zh")))
+
+    # Where the effect differs from Python's. The paired comparison is the primary
+    # test; the mixed model assumes one effect for every prompt, so its intervals are
+    # narrower. Near the line they disagree, and the text says which says what.
+    def mm_inter(p, l):
+        return mm.get(("both", f"C(lang, Treatment('en'))[T.{l}]:"
+                               f"C(plang, Treatment('python'))[T.{p}]"))
+    larger = sorted(((p, l) for (p, l), v in inter.items() if v["est"] < 0
+                     and (clear(v) or (mm_inter(p, l) and mm_inter(p, l)[2] < 1))),
+                    key=lambda k: (ORDER.index(k[1]), PORDER.index(k[0])))
+    boot_clear = [k for k in larger if clear(inter[k])]
+    if not inter:
+        inter_txt = summary_inter = ""
+    elif not larger:
         lo = min(v["est"] for v in inter.values())
         hi = max(v["est"] for v in inter.values())
-        inter_txt = (f"In no programming language is the effect distinguishable from "
-                     f"Python's: the {len(inter)} differences run from {signed(lo)} to "
-                     f"{signed(hi)} points, and every interval includes zero.")
-    elif inter_clear:
-        inter_txt = ("The effect differs from Python's in "
-                     f"{len(inter_clear)} of {len(inter)} combinations: "
-                     + plain_list(f"{PLANG[p]} in {LANG[l]} ({signed(v['est'])} points)"
-                                  for (p, l), v in sorted(inter_clear))
-                     + "; the rest are within noise of Python.")
+        inter_txt = (f"In no programming language does the effect differ from Python's beyond "
+                     f"noise: the {len(inter)} differences run from {signed(lo)} to "
+                     f"{signed(hi)} points, and the mixed model agrees.")
+        summary_inter = "Its size is the same as in Python, within noise."
     else:
-        inter_txt = ""
-    # Validity in the grid: report any language that moves it beyond noise.
+        by_l = defaultdict(list)
+        for p_, l_ in larger:
+            by_l[l_].append(p_)
+        phrases = [f"the {LANG[l_]} drop in {plain_list(PLANG[x] for x in ps)}"
+                   for l_, ps in by_l.items()]
+        ests = sorted(abs(inter[k]["est"]) for k in larger)
+        size = (f"by {ests[0]:.1f} points" if len(ests) == 1
+                else f"by {ests[0]:.1f} to {ests[-1]:.1f} points")
+        inter_txt = f"Compared with Python, {plain_list(phrases)} {'is' if len(larger) == 1 else 'are'} a little larger, {size}"
+        if len(boot_clear) == len(larger):
+            inter_txt += ", beyond noise in the paired comparison."
+        elif not boot_clear:
+            inter_txt += ("; the paired intervals include zero, and only the mixed model, "
+                          "which assumes one effect for every prompt and so gives narrower "
+                          "intervals, puts " + ("it" if len(larger) == 1 else "them")
+                          + " beyond noise.")
+        else:
+            inter_txt += ("; the paired comparison puts "
+                          + plain_list(f"{PLANG[p_]} in {LANG[l_]}" for p_, l_ in boot_clear)
+                          + " beyond noise, the mixed model the rest.")
+        inter_txt += " Every other difference from Python is within noise."
+        summary_inter = (f"It is a little larger than in Python for "
+                         + plain_list(f"{LANG[l_]} in {plain_list(PLANG[x] for x in ps)}"
+                                      for l_, ps in by_l.items())
+                         + (", though only the mixed model puts that beyond noise."
+                            if not boot_clear else "."))
+    # Validity in the grid moves through two habits of single models, named from the
+    # files: headerless includes in one model's C and C++, and refusals in another's.
+    allx = e2["all"]
+
+    def share(m, plangs, lang, test):
+        g = [r for r in allx if r["model"] == m and r["plang"] in plangs and r["lang"] == lang]
+        return 100.0 * sum(1 for r in g if test(r)) / len(g) if g else None
+
+    def bare(r):
+        return int(r.get("bare_includes") or 0) > 0
+
+    def valid(r):
+        return r["syntax_ok"] == "1"
+
+    cc = ("cpp", "c")
+    gb_en = share(worst, cc, "en", bare) or 0
+    gb_other = max((share(worst, cc, l, bare) or 0) for l in ORDER[1:])
+    gv_en = share(worst, cc, "en", valid)
+    gv_other = [share(worst, cc, l, valid) for l in ORDER[1:] if share(worst, cc, l, valid)]
+    english_only = has_grid and gb_en >= 10 and gb_other < 1
+    valid3_txt = ""
+    if has_grid and gv_other:
+        valid3_txt = (
+            f"Valid code moves with the prompt language only through habits of single models. "
+            f"<code>{worst}</code> writes headerless <code>#include</code> lines in "
+            f"{gb_en:.0f}% of its English C and C++ answers and in at most {gb_other:.1f}% "
+            f"in the other languages, so its C and C++ validity rises from {gv_en:.0f}% in "
+            f"English to {min(gv_other):.0f} to {max(gv_other):.0f}% elsewhere.")
+        per_m = defaultdict(lambda: [0, 0])
+        for r in e2["refusals"]:
+            if r["lang"] == "es" and r["plang"] != "python":
+                per_m[r["model"]][0] += int(r["refusals"])
+                per_m[r["model"]][1] += int(r["n"])
+        if per_m:
+            m_top = max(per_m, key=lambda m: per_m[m][0])
+            k_, n_ = per_m[m_top]
+            if k_ >= 10:
+                valid3_txt += (f" In the other direction, <code>{m_top}</code> declines {k_} "
+                               f"of its {n_:,} Spanish Java, C++ and C prompts "
+                               f"({100.0 * k_ / n_:.0f}%) and almost none in English.")
     v3 = {(p, l): eff.get("both", p, f"{l} - en", "validity") for p in PORDER for l in ORDER[1:]}
     v3_clear = [(k, v) for k, v in v3.items() if v and clear(v) and abs(v["est"]) >= 3]
+    refusal3_txt = ""
+    if e2["refusals"] and v3_clear:
+        langs3 = sorted({l for (p, l), v in v3_clear if v["est"] < 0})
+        parts = []
+        for l in langs3:
+            k, n, who = refusals_by(e2["refusals"], l, plangs={"java", "cpp", "c"})
+            if k and who:
+                parts.append(f"{k} of the {n:,} {LANG[l]} Java, C++ and C replies are refusals, "
+                             f"most from {plain_list(f'<code>{m}</code>' for m in who)}")
+        if parts:
+            refusal3_txt = " The drops are mostly the model declining the task: " + "; ".join(parts) + "."
 
     # ---------------------------------------------------------------- summary
     findings = []
@@ -401,14 +519,22 @@ def build(analysis: Path, xlang: Path, docs: Path):
             "<strong>Prompt language and smell production.</strong> Against English: "
             + plain_list(f"{LANG[l]} {signed(d1[l]['est'])} points" for l in ORDER[1:] if d1[l])
             + ".")
+    # The same check on the ported prompts, in the five-model grid.
+    tr_x = [r for r in e2["translation"]
+            if r["scores"].startswith("both") and r["plang"] != "python"]
+    tr_x_clear = [r for r in tr_x if num(r, "ci_hi") < 0]
+    tr_x_rev = [r for r in tr_x if num(r, "difference") > 0]
     if tr_clear:
         l, r = tr_clear[0]
         findings.append(
-            f"<strong>In {LANG[l]}, the drop is larger where translation damaged the "
-            f"prompt.</strong> Where machine translation changed a name the prompt asked "
-            f"for, smell production falls "
+            f"<strong>In {LANG[l]}, part of the drop travels with translation "
+            f"damage.</strong> In the Python prompts, where machine translation changed a "
+            f"name the prompt asked for, smell production falls "
             f"{abs(num(r, 'drop_lost_some')):.0f} points; where every name survived, "
-            f"{abs(num(r, 'drop_kept_all')):.0f}.")
+            f"{abs(num(r, 'drop_kept_all')):.0f}."
+            + (f" In the Java, C++ and C prompts the pattern is not consistent: clear in "
+               f"{len(tr_x_clear)} of {len(tr_x)} combinations and reversed in "
+               f"{len(tr_x_rev)}." if tr_x else ""))
     d2v = [d for d in d2.values() if d]
     lean = (len({d["est"] > 0 for d in d2v}) == 1
             and all(d["same"] == d["n"] for d in d2v))
@@ -421,20 +547,30 @@ def build(analysis: Path, xlang: Path, docs: Path):
         + f"; smell by smell they differ by up to {top_vals[hi_l] - top_vals[lo_l]:.0f} "
         f"points, following each language's habits.")
     if has_grid and found3:
+        holds = n_down == len(found3) and n_down_clear == len(found3)
         findings.append(
-            f"<strong>The prompt-language effect is the same in every programming "
-            f"language.</strong> " if inter and not inter_clear else
-            f"<strong>The prompt-language effect depends on the programming "
-            f"language.</strong> ")
-        findings[-1] += (f"Smell production falls in {n_down} of the {len(found3)} "
-                         f"combinations of prompt and programming language"
-                         + (f" ({n_down_clear} beyond noise)" if n_down_clear != n_down else "")
-                         + ". " + inter_txt)
+            ("<strong>The prompt-language effect holds in every programming language.</strong> "
+             if holds else "<strong>The prompt-language effect in other programming "
+             "languages.</strong> ")
+            + f"Against English, smell production falls in {n_down} of the {len(found3)} "
+            f"combinations of prompt and programming language"
+            + (", every one beyond noise" if n_down_clear == len(found3) else
+               f" ({n_down_clear} beyond noise)")
+            + (f", with all {d3[next(iter(k for k in d3 if d3[k]))]['n']} models agreeing in "
+               f"{n_all_agree}" if n_all_agree else "")
+            + (f"; Chinese costs most, {abs(max(zh_other)):.1f} to {abs(min(zh_other)):.1f} "
+               f"points in Java, C++ and C" if zh_most else "")
+            + ". " + summary_inter)
     findings.append(
-        f"<strong>C and C++ produce less valid code because of one model.</strong> "
+        f"<strong>C and C++ produce less valid code because of one model"
+        + (", and only in English" if english_only else "") + ".</strong> "
         f"<code>{worst}</code> writes <code>#include</code> lines that name no header in "
-        f"{wv['cpp']['bare']:.0f}% of its C++ and {wv['c']['bare']:.0f}% of its C answers; "
-        f"no other model does this in more than {e2['others_bare']:.0f}%.")
+        f"{wv['cpp']['bare']:.0f}% of its English C++ and {wv['c']['bare']:.0f}% of its "
+        f"English C answers"
+        + (", and almost never when the prompt is in Spanish, French or Chinese"
+           if english_only else "")
+        + ("; no other model does this at all." if e2["others_bare"] == 0 else
+           f"; no other model does this in more than {e2['others_bare']:.0f}%."))
 
     # ---------------------------------------------------------------- smells
     weak, srows = [], []
@@ -493,8 +629,9 @@ def build(analysis: Path, xlang: Path, docs: Path):
                else "disagrees on the direction of at least one effect")
             + "; its odds ratios against English are "
             + plain_list(f"{o[0]:.2f} in {LANG[l]}" for l, o in e1_or if o) + "."
-            + (f" It is more confident than the resampling about the programming "
-               f"language, putting {plain_list(above)} above Python." if above else ""))
+            + (f" Because it assumes one effect for every prompt, its intervals are "
+               f"narrower: it puts {plain_list(above)} above Python, which the resampling "
+               f"does not." if above else ""))
 
     controls = table(["Control", "What it does", "Why"], [
         ["Validity", "Smell and quality figures use parsing files only",
@@ -525,9 +662,7 @@ def build(analysis: Path, xlang: Path, docs: Path):
   </figure>
   <p>{inter_txt}</p>
   {grid_table}
-  {('<p>Valid code moves beyond noise in ' + plain_list(
-      f"{PLANG[p]} in {LANG[l]} ({signed(v['est'])} points)" for (p, l), v in sorted(v3_clear))
-    + '.</p>') if v3_clear else
+  {('<p>' + valid3_txt + '</p>') if valid3_txt else
    '<p>Whether the code is valid does not move by more than 3 points in any combination.</p>'}
 </section>"""
 
@@ -561,6 +696,7 @@ def build(analysis: Path, xlang: Path, docs: Path):
   the last column counts the models whose own rate falls.</p>
   {lang_table}
   {strong_txt}
+  {refusal1_txt}
   <p>Code quality does not depend on the prompt language: on files that parse,
   {min(lint_valid):.1f} to {max(lint_valid):.1f} lint violations per 100 lines in all
   four. Files that fail to parse average {e1['density']['0']:.0f} per 100 lines, which is
@@ -575,17 +711,17 @@ def build(analysis: Path, xlang: Path, docs: Path):
 
 <section>
   <h2>Experiment 2 · programming language</h2>
-  <p>The English prompts ported to Java, C++ and C, asked of {len(e2['five'])} models,
-  one per family at 7B to 9B. C is asked {e2['n_c']} of the {e2['n_all']} prompts
+  <p>The English prompts ported to Java, C++ and C, asked of {len(e2['five'])} models:
+  one dense model of 7 to 9 billion parameters from each of {len(e2['five'])} families. C is asked {e2['n_c']} of the {e2['n_all']} prompts
   because {e2['n_class_smells']} smells are defined over classes; each comparison uses
   the prompts asked in both languages.</p>
   {plang_table}
   <p class="callout">The C and C++ validity gap is one model. <code>{worst}</code> writes
   valid C++ {wv['cpp']['valid']:.0f}% and C {wv['c']['valid']:.0f}% of the time, against
-  {wv['python']['valid']:.0f}% in Python. Its C and C++ answers open with
-  <code>#include</code> lines that name no header, which no compiler accepts, and in
-  {wv['cpp']['looping']:.0f}% of C++ and {wv['c']['looping']:.0f}% of C answers it repeats
-  that line until the output limit. The other {len(e2['five']) - 1} models stay between
+  {wv['python']['valid']:.0f}% in Python. In {wv['cpp']['bare']:.0f}% of its C++ and
+  {wv['c']['bare']:.0f}% of its C answers it writes <code>#include</code> lines that name no
+  header, which no compiler accepts, and in {wv['cpp']['looping']:.0f}% and
+  {wv['c']['looping']:.0f}% it repeats that line until the output limit. The other {len(e2['five']) - 1} models stay between
   {e2['rest_range'][0]:.1f} and {e2['rest_range'][1]:.1f}% in every
   language.{runaway_txt}</p>
   <h3>Smells follow each language's habits</h3>
